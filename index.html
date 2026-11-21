@@ -18,7 +18,7 @@ button:active{background:#1e2b47}
 button.pri{background:var(--acc);color:#04121f;border-color:var(--acc);font-weight:600}
 button.on{border-color:var(--yel);color:var(--yel)}
 #status{font-size:12px;color:var(--yel);display:flex;gap:10px;flex-wrap:wrap;min-height:18px;margin-bottom:8px}
-nav{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px}
+nav{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
 nav button{padding:8px 0;font-size:13px}
 nav button.sel{background:#1e2b47;border-color:var(--acc);color:var(--acc)}
 section{display:none}
@@ -40,6 +40,21 @@ td{padding:7px 0;border-bottom:1px solid var(--line)}
 td:last-child{text-align:right;font-variant-numeric:tabular-nums}
 #msg{font-size:13px;color:var(--ng);margin:6px 0;white-space:pre-wrap}
 .note{font-size:12px;color:var(--dim);line-height:1.6}
+.lbl{font-size:12px;color:var(--dim);margin:12px 2px 6px}
+.seg{display:flex;gap:6px;margin-bottom:4px}
+.seg button{flex:1;padding:8px 4px;font-size:14px}
+.seg button.on{background:#2a2410}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.chip{font-size:12px;padding:4px 9px;border-radius:99px;background:#1e2b47;color:var(--fg)}
+.chip.ok{background:#12382a;color:var(--ok)}.chip.warn{background:#3a2f10;color:var(--yel)}.chip.dim{color:var(--dim)}
+.stats.four{grid-template-columns:repeat(4,1fr)}.stats.four div{font-size:15px}
+#lvRow{display:flex;gap:6px;align-items:center}
+#lvRow button{flex:0 0 52px;padding:8px 0}#lvRow #btnLvAuto{flex:0 0 72px}
+#lvVal{flex:1;text-align:center;font-size:18px;font-variant-numeric:tabular-nums}
+#contBox{border-radius:14px;padding:22px 10px;text-align:center;background:var(--panel);border:1px solid var(--line);margin-bottom:10px}
+#contBox.short{background:#12382a;border-color:var(--ok)}#contBox.volt{background:#3a1616;border-color:var(--ng)}
+#contWord{font-size:44px;font-weight:700}#contOhm{font-size:26px;font-variant-numeric:tabular-nums;margin-top:6px;color:var(--dim)}
+#sub{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:8px}
 </style>
 </head>
 <body>
@@ -53,6 +68,7 @@ td:last-child{text-align:right;font-variant-numeric:tabular-nums}
   <button data-tab="volt" class="sel">電圧</button>
   <button data-tab="plot">プロット</button>
   <button data-tab="scope">スコープ</button>
+  <button data-tab="cont">導通</button>
   <button data-tab="rs485">RS485</button>
   <button data-tab="info">情報</button>
 </nav>
@@ -60,7 +76,7 @@ td:last-child{text-align:right;font-variant-numeric:tabular-nums}
 <section id="volt" class="sel">
   <div class="card">
     <div id="big">--.---<small>V</small></div>
-    <div id="rng">未接続</div>
+    <div id="sub"><span class="chip dim">未接続</span></div>
   </div>
   <div class="card stats">
     <div><span>最小</span><b id="vMin">--</b></div>
@@ -80,15 +96,31 @@ td:last-child{text-align:right;font-variant-numeric:tabular-nums}
 </section>
 
 <section id="scope">
-  <div class="card"><canvas id="cvScope"></canvas></div>
-  <div class="card stats">
-    <div><span>Vpp</span><b id="scVpp">--</b></div>
-    <div><span>平均</span><b id="scAvg">--</b></div>
+  <div class="card"><canvas id="cvScope"></canvas><div class="chips" id="scChips"><span class="chip dim">未取得</span></div></div>
+  <div class="card stats four">
+    <div><span>振幅 Vpp</span><b id="scVpp">--</b></div>
+    <div><span>最小</span><b id="scMin">--</b></div>
+    <div><span>最大</span><b id="scMax">--</b></div>
     <div><span>周波数</span><b id="scFreq">--</b></div>
   </div>
-  <div class="row"><button id="btnScRun" class="on">連続</button><button id="btnScSingle">単発</button><button id="btnScTb">間隔 --</button></div>
-  <div class="row"><button id="btnScCsv">CSV</button></div>
-  <p class="note" id="scNote">128 点。間隔は 最速（約 39µs）→ 100µs → 1ms の順に切り替わります。形が分かるのは最速で約 2.5kHz までです。</p>
+  <div class="lbl">取り込み</div>
+  <div class="seg" id="segRun"><button data-v="run" class="on">連続</button><button data-v="single">単発</button><button data-v="stop">停止</button></div>
+  <div class="lbl">時間軸（サンプル間隔 → 画面の横幅）</div>
+  <div class="seg" id="segTb"><button data-v="0">39µs → 5ms</button><button data-v="1">100µs → 13ms</button><button data-v="2">1ms → 128ms</button></div>
+  <div class="lbl">トリガ方式</div>
+  <div class="seg" id="segTm"><button data-v="A">オート</button><button data-v="N">ノーマル</button></div>
+  <div class="lbl">トリガの向き</div>
+  <div class="seg" id="segTe"><button data-v="R">立ち上がり ↑</button><button data-v="F">立ち下がり ↓</button></div>
+  <div class="lbl">トリガレベル</div>
+  <div id="lvRow"><button id="btnLvAuto">自動</button><button id="btnLvDn">−</button><div id="lvVal">--</div><button id="btnLvUp">＋</button></div>
+  <div class="row" style="margin-top:14px"><button id="btnScCsv">波形を CSV で保存</button></div>
+  <p class="note">オート：トリガが掛からなくても 0.05 秒で波形を更新します。ノーマル：トリガが掛かったときだけ更新します。単発：1 回掛かったら止まります。<br>緑の横線がトリガレベル、縦線がトリガ位置です。＋／−は 1 回で縦軸の約 1/20 動きます。形が分かるのは最速で約 2.5kHz までです。</p>
+</section>
+
+<section id="cont">
+  <div id="contBox"><div id="contWord">--</div><div id="contOhm">&nbsp;</div></div>
+  <div class="row"><button id="btnBeep" class="on">音 ON</button><button id="btnZero">ゼロ調整</button><button id="btnZeroClr">ゼロ解除</button></div>
+  <p class="note"><b style="color:var(--ng)">電源の入った回路には当てないでください。</b>本体は、電圧がない（0.2V 未満）ことを確かめてから測定電流（最大約 0.33mA）を流し、2 秒ごとに確かめ直します。ただし保護回路はないので、測定中に高い電圧がかかると壊れるおそれがあります。<br>50Ω 以下で「導通」と表示します。分解能は約 5Ω です。ゼロ調整は、プローブ同士を当てた状態で押してください。<br>このタブを離れると、本体は電圧測定に戻ります。</p>
 </section>
 
 <section id="rs485">
@@ -113,12 +145,14 @@ td:last-child{text-align:right;font-variant-numeric:tabular-nums}
 'use strict';
 const NUS='6e400001-b5a3-f393-e0a9-e50e24dcca9e',RXU='6e400002-b5a3-f393-e0a9-e50e24dcca9e',TXU='6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 const $=id=>document.getElementById(id);
-const MODES='VPSRI';
+
 let dev=null,rx=null,tx=null,connected=false,rxBuf='',dec=new TextDecoder(),enc=new TextEncoder();
 let wq=Promise.resolve(),devMode='V',tab='volt',nLines=0,nErr=0;
 let hold=false,st={min:Infinity,max:-Infinity,sum:0,n:0};
 let plot=[],plotRun=true,plotWin=120;
-let sc=null,scRun=true,scWait=false,scTimer=null,scWatch=null;
+let sc=null,scState='run',scWait=false,scTimer=null,scWatch=null,scLastId=-1,scWaiting=false,cfg={tm:'A',te:'R',tla:1,tl:0,tb:0},fwOk=true;
+let beep=true,actx=null,osc=null,gain=null,contLast=0;
+const RNG=['±48V','±10V','±4.5V','±3V'],RES=['25mV','5mV','2.3mV','1.7mV'];
 let frames=[],frPause=false,baud=0;
 
 function msg(t){$('msg').textContent=t||'';}
@@ -143,7 +177,7 @@ function disconnect(){ try{dev&&dev.gatt.connected&&dev.gatt.disconnect();}catch
 function onDisc(){ connected=false; scWait=false; clearTimeout(scTimer); clearTimeout(scWatch); setConn(); msg('切断されました'); }
 function setConn(){
   $('dot').className=connected?'on':''; $('btnConn').textContent=connected?'切断':'接続';
-  $('btnConn').className=connected?'':'pri'; if(!connected) $('rng').textContent='未接続';
+  $('btnConn').className=connected?'':'pri'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
 function send(c){
   if(!connected) return Promise.resolve();
@@ -165,15 +199,19 @@ function onData(ev){
   if(rxBuf.length>8000) rxBuf='';
 }
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-// 本体の画面を target（V/P/S/R/I）に合わせる。n = 次の画面
+// 本体の画面を target（V/P/S/R/I）に合わせる
 async function gotoMode(target){
-  for(let tries=0;tries<3&&connected;tries++){
-    if(devMode===target) return true;
-    const steps=(MODES.indexOf(target)-MODES.indexOf(devMode)+5)%5;
-    for(let k=0;k<steps;k++){ await send('n'); await sleep(120); }
-    for(let t=0;t<15&&devMode!==target;t++) await sleep(100);
+  for(let tries=0;tries<3&&connected&&devMode!==target;tries++){
+    await send('!MODE='+target+'\n');
+    for(let t=0;t<12&&devMode!==target;t++) await sleep(100);
   }
   return devMode===target;
+}
+function setSeg(id,v){ document.querySelectorAll('#'+id+' button').forEach(b=>b.classList.toggle('on',b.dataset.v===String(v))); }
+function showCfg(){
+  setSeg('segTm',cfg.tm); setSeg('segTe',cfg.te); setSeg('segTb',cfg.tb);
+  $('btnLvAuto').classList.toggle('on',!!cfg.tla);
+  $('lvVal').textContent=(cfg.tla?'自動 ':'')+fmtV(cfg.tl,1)+' V';
 }
 
 // ---------- 受信処理 ----------
@@ -183,7 +221,7 @@ function handle(o){
     devMode=o.m;
     if(!hold){
       $('big').innerHTML=(o.o?'OVER':fmtV(o.v,o.r))+'<small>V</small>';
-      $('rng').textContent='レンジ r'+o.r+'（自動）'+(o.m==='S'?'・スコープ中の平均値':'');
+      $('sub').innerHTML='<span class="chip">レンジ '+RNG[o.r]+'（自動切替）</span><span class="chip dim">分解能 '+RES[o.r]+'</span>'+(o.o?'<span class="chip warn">入力が範囲外</span>':'')+(o.m==='S'?'<span class="chip warn">スコープ動作中（波形の平均値）</span>':'')+(hold?'<span class="chip warn">ホールド中</span>':'');
     }
     if(!o.o){
       if(!hold){ st.min=Math.min(st.min,o.v); st.max=Math.max(st.max,o.v); st.sum+=o.v; st.n++;
@@ -198,9 +236,26 @@ function handle(o){
     $('iBat').textContent=bat; $('iEnv').textContent=env; $('iMode').textContent=o.mode; $('iFw').textContent=o.fw;
     $('iBaud').textContent=o.baud+' bps'; $('btnBaud').textContent='速度 '+(o.baud===38400?'38.4k':'307.2k');
     $('iRx').textContent=nLines+' / '+nErr;
+    if(parseFloat(o.fw)<0.97&&fwOk){ fwOk=false; msg('本体のファームが '+o.fw+' です。導通とスコープのトリガ設定には 0.97 以上が必要です。'); }
+  }else if(o.c){
+    devMode='C'; contLast=Date.now();
+    const box=$('contBox'),short=o.s==='SHORT';
+    box.className=short?'short':o.s==='VOLT'?'volt':'';
+    $('contWord').textContent={SHORT:'導通',OPEN:'開放',R:'抵抗あり',VOLT:'電圧あり',CHK:'確認中'}[o.s]||o.s;
+    $('contOhm').textContent=o.s==='VOLT'?'外部電圧 '+fmtV(o.ext,1)+' V（測定を止めています）':(o.s==='SHORT'||o.s==='R')?(o.ohm>=1000?(o.ohm/1000).toFixed(1)+' kΩ':o.ohm.toFixed(0)+' Ω')+(o.zero?'（ゼロ調整 '+o.zero.toFixed(0)+'Ω）':''):'\u00a0';
+    tone(short&&tab==='cont');
+  }else if(o.cfg){
+    cfg=o; if(o.mode) devMode=o.mode; showCfg();
+  }else if(o.scw){
+    scWaiting=true; scWait=false; clearTimeout(scWatch); if(sc) drawScope();
+    if(tab==='scope'&&scState!=='stop') scTimer=setTimeout(scRequest,300);
   }else if(o.sc){
-    sc=o; scWait=false; clearTimeout(scWatch); drawScope();
-    if(tab==='scope'&&scRun) scTimer=setTimeout(scRequest,250);
+    scWaiting=(o.id===scLastId); scLastId=o.id;
+    sc=o; scWait=false; clearTimeout(scWatch);
+    if(o.tm){ cfg.tm=o.tm; cfg.te=o.te; if(cfg.tla) cfg.tl=o.lv; showCfg(); }
+    drawScope();
+    if(scState==='single'&&!scWaiting&&o.trig){ scState='stop'; setSeg('segRun','stop'); }
+    if(tab==='scope'&&scState!=='stop') scTimer=setTimeout(scRequest,scWaiting?150:250);
   }else if(o.fr!==undefined){
     if(!frPause){ frames.unshift(o); if(frames.length>60) frames.length=60; if(tab==='rs485') drawFrames(); }
   }
@@ -254,25 +309,35 @@ async function scRequest(){
   if(!connected||tab!=='scope'||scWait) return;
   if(devMode!=='S'&&!(await gotoMode('S'))) { scTimer=setTimeout(scRequest,1000); return; }
   scWait=true; send('W');
-  clearTimeout(scWatch); scWatch=setTimeout(()=>{scWait=false; if(tab==='scope'&&scRun) scRequest();},5000);
+  clearTimeout(scWatch); scWatch=setTimeout(()=>{scWait=false; if(tab==='scope'&&scState!=='stop') scRequest();},5000);
 }
-function tbName(us){ return us<70?'最速':us<500?'100µs':'1ms'; }
+function scRange(){ let mn=Infinity,mx=-Infinity; sc.v.forEach(x=>{mn=Math.min(mn,x);mx=Math.max(mx,x);}); return [mn,mx]; }
 function drawScope(){
   const [c,W,H]=prep($('cvScope'));
   if(!sc){ axes(c,W,H,0,1,0,1,''); return; }
-  const v=sc.v,n=v.length; let mn=Infinity,mx=-Infinity,sum=0; v.forEach(x=>{mn=Math.min(mn,x);mx=Math.max(mx,x);sum+=x;});
-  const avg=sum/n, totUs=sc.us*(n-1), ms=totUs>=2000, [lo,hi]=range(mn,mx,0.05);
+  const v=sc.v,n=v.length,[mn,mx]=scRange(); let sum=0; v.forEach(x=>sum+=x);
+  const avg=sum/n, totUs=sc.us*(n-1), ms=totUs>=2000;
+  let lo0=mn,hi0=mx; if(sc.lv!==undefined&&!cfg.tla){ lo0=Math.min(lo0,sc.lv); hi0=Math.max(hi0,sc.lv); }
+  const [lo,hi]=range(lo0,hi0,0.05);
   const a=axes(c,W,H,lo,hi,0,ms?totUs/1000:totUs,ms?'ms':'µs');
+  // トリガレベル（横線）とトリガ位置（縦線）
+  if(sc.lv!==undefined&&sc.lv>=lo&&sc.lv<=hi){
+    c.setLineDash([5,4]); c.strokeStyle='#3ddc97'; c.lineWidth=1; const y=a.y(sc.lv);
+    c.beginPath(); c.moveTo(a.L,y); c.lineTo(a.L+a.pw,y); c.stroke();
+    if(sc.trig&&sc.pre!==undefined){ const x=a.x(sc.pre/(n-1)); c.beginPath(); c.moveTo(x,a.T); c.lineTo(x,a.T+a.ph); c.stroke(); }
+    c.setLineDash([]); c.fillStyle='#3ddc97'; c.textAlign='left'; c.textBaseline='bottom'; c.font='11px -apple-system,sans-serif';
+    c.fillText('T '+(sc.te==='F'?'↓':'↑'),a.L+3,y-2);
+  }
   c.strokeStyle='#ffd24a'; c.lineWidth=1.6; c.lineJoin='round'; c.beginPath();
   v.forEach((y,i)=>{const X=a.x(i/(n-1)),Y=a.y(y); i?c.lineTo(X,Y):c.moveTo(X,Y);}); c.stroke();
-  c.fillStyle=sc.trig?'#3ddc97':'#8a97b4'; c.textAlign='right'; c.textBaseline='top'; c.font='12px -apple-system,sans-serif';
-  c.fillText((sc.trig?'トリガ':'フリーラン')+'・r'+sc.r+'・'+sc.us.toFixed(0)+'µs/点',W-12,14);
   // 周波数: 平均を上向きに横切る点（ヒステリシス付き）の間隔
   const hy=Math.max((mx-mn)*0.1,0.004); let armed=false,cross=[];
   for(let i=1;i<n;i++){ if(v[i]<avg-hy) armed=true; else if(armed&&v[i]>avg+hy){ cross.push(i-(v[i]-avg)/(v[i]-v[i-1]||1)); armed=false; } }
-  let f='--'; if(cross.length>=2){ const per=(cross[cross.length-1]-cross[0])/(cross.length-1)*sc.us*1e-6, hz=1/per; f=hz>=1000?(hz/1000).toFixed(2)+' kHz':hz.toFixed(1)+' Hz'; }
-  $('scVpp').textContent=(mx-mn).toFixed(3)+' V'; $('scAvg').textContent=fmtV(avg,1)+' V'; $('scFreq').textContent=f;
-  $('btnScTb').textContent='間隔 '+tbName(sc.us);
+  let f='--'; if(cross.length>=2){ const per=(cross[cross.length-1]-cross[0])/(cross.length-1)*sc.us*1e-6, hz=1/per; f=hz>=1000?(hz/1000).toFixed(2)+'kHz':hz.toFixed(1)+'Hz'; }
+  $('scVpp').textContent=(mx-mn).toFixed(3)+'V'; $('scMin').textContent=fmtV(mn,1); $('scMax').textContent=fmtV(mx,1); $('scFreq').textContent=f;
+  const div=totUs/4, divTxt=div>=1000?(div/1000).toFixed(div>=10000?0:1)+'ms':div.toFixed(0)+'µs';
+  const stt=scWaiting?'<span class="chip warn">トリガ待ち（前の波形を表示中）</span>':sc.trig?'<span class="chip ok">トリガ済み</span>':'<span class="chip warn">トリガなし（フリーラン）</span>';
+  $('scChips').innerHTML=stt+'<span class="chip">レンジ '+RNG[sc.r]+'</span><span class="chip">横 1 目盛 '+divTxt+'</span><span class="chip dim">'+sc.us.toFixed(0)+'µs/点 × 128 点</span>'+(scState==='stop'?'<span class="chip dim">停止中</span>':'');
 }
 
 // ---------- RS-485 ----------
@@ -280,6 +345,11 @@ function drawFrames(){
   if(!frames.length){ $('frames').textContent='受信待ち'; return; }
   $('frames').innerHTML=frames.map(f=>'<b>'+(f.t/1000).toFixed(2)+'s ['+f.n+']</b> '+(f.fr.match(/../g)||[]).join(' ')+(f.n*2>f.fr.length?' …':'')).join('\n');
 }
+
+// ---------- 導通の音 ----------
+function audioInit(){ if(actx) return; try{ const A=window.AudioContext||window.webkitAudioContext; actx=new A(); osc=actx.createOscillator(); gain=actx.createGain(); osc.frequency.value=2000; gain.gain.value=0; osc.connect(gain); gain.connect(actx.destination); osc.start(); }catch(e){} }
+function tone(on){ if(!gain) return; if(actx.state==='suspended') actx.resume(); gain.gain.value=(on&&beep)?0.15:0; }
+setInterval(()=>{ if(Date.now()-contLast>700) tone(false); },300);
 
 // ---------- CSV ----------
 function saveCsv(name,text){
@@ -295,24 +365,42 @@ function selectTab(t){
   clearTimeout(scTimer);
   if(t==='plot') drawPlot();
   if(t==='rs485') drawFrames();
-  if(t==='scope'){ drawScope(); if(scRun) scRequest(); }
-  else if(connected&&devMode==='S') gotoMode('V');   // スコープ以外では本体を通常測定に戻す
+  if(t==='scope'){ drawScope(); if(connected) send('!CFG\n'); if(scState!=='stop') scRequest(); }
+  if(t==='cont'){ audioInit(); if(connected) gotoMode('C'); }
+  else if(t!=='scope'&&connected&&(devMode==='S'||devMode==='C')) gotoMode('V');   // 本体を通常測定に戻す（導通の測定電流も止まる）
+  if(t!=='cont') tone(false);
 }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>selectTab(b.dataset.tab));
 $('btnConn').onclick=()=>connected?disconnect():connect();
-$('btnHold').onclick=()=>{hold=!hold; $('btnHold').classList.toggle('on',hold);};
+$('btnHold').onclick=()=>{hold=!hold; $('btnHold').classList.toggle('on',hold); $('btnHold').textContent=hold?'ホールド解除':'ホールド';};
 $('btnStat').onclick=()=>{st={min:Infinity,max:-Infinity,sum:0,n:0}; ['vMin','vMax','vAvg'].forEach(i=>$(i).textContent='--');};
 document.querySelectorAll('[data-win]').forEach(b=>b.onclick=()=>{plotWin=+b.dataset.win; document.querySelectorAll('[data-win]').forEach(x=>x.classList.toggle('on',x===b)); drawPlot();});
 $('btnPlotRun').onclick=()=>{plotRun=!plotRun; $('btnPlotRun').textContent=plotRun?'停止':'再開'; drawPlot();};
 $('btnPlotClr').onclick=()=>{plot=[]; drawPlot();};
 $('btnPlotCsv').onclick=()=>saveCsv('plot.csv','time_iso,volt\n'+plot.map(p=>new Date(p[0]).toISOString()+','+p[1]).join('\n'));
-$('btnScRun').onclick=()=>{scRun=!scRun; $('btnScRun').classList.toggle('on',scRun); $('btnScRun').textContent=scRun?'連続':'停止中'; if(scRun) scRequest(); else clearTimeout(scTimer);};
-$('btnScSingle').onclick=()=>{scRun=false; $('btnScRun').classList.remove('on'); $('btnScRun').textContent='停止中'; clearTimeout(scTimer); scWait=false; scRequest();};
-$('btnScTb').onclick=async()=>{ if(!connected) return; if(devMode!=='S'&&!(await gotoMode('S'))) return; await send('x'); await sleep(400); scWait=false; scRequest(); };
+document.querySelectorAll('#segRun button').forEach(b=>b.onclick=async()=>{
+  scState=b.dataset.v; setSeg('segRun',scState); clearTimeout(scTimer); scWait=false;
+  if(scState==='single'){ await send('!TM=N\n'); scLastId=sc?sc.id:-1; }
+  if(scState!=='stop') scRequest(); else if(sc) drawScope();
+});
+function cfgBtn(seg,cmd){ document.querySelectorAll('#'+seg+' button').forEach(b=>b.onclick=async()=>{ if(!connected) return; await send('!'+cmd+'='+b.dataset.v+'\n'); if(scState!=='stop'){ scWait=false; scRequest(); } }); }
+cfgBtn('segTb','TB'); cfgBtn('segTm','TM'); cfgBtn('segTe','TE');
+$('btnLvAuto').onclick=()=>send('!TL=A\n');
+function lvStep(dir){
+  if(!connected) return;
+  let span=1; if(sc){ const [mn,mx]=scRange(); span=Math.max(mx-mn,0.1); }
+  const stp=Math.max(0.005,span/20), base=(sc&&sc.lv!==undefined&&cfg.tla)?sc.lv:cfg.tl;
+  send('!TL='+(base+dir*stp).toFixed(3)+'\n');
+}
+$('btnLvDn').onclick=()=>lvStep(-1); $('btnLvUp').onclick=()=>lvStep(1);
 $('btnScCsv').onclick=()=>{ if(sc) saveCsv('scope.csv','t_us,volt\n'+sc.v.map((y,i)=>(i*sc.us).toFixed(1)+','+y).join('\n')); };
+$('btnBeep').onclick=()=>{beep=!beep; $('btnBeep').classList.toggle('on',beep); $('btnBeep').textContent=beep?'音 ON':'音 OFF'; audioInit();};
+$('btnZero').onclick=()=>send('x');
+$('btnZeroClr').onclick=()=>send('X');
 $('btnBaud').onclick=()=>{ send('b'); frames=[]; drawFrames(); };
 $('btnFrClr').onclick=()=>{ send('c'); frames=[]; drawFrames(); };
 $('btnFrPause').onclick=()=>{ frPause=!frPause; $('btnFrPause').classList.toggle('on',frPause); $('btnFrPause').textContent=frPause?'再開':'一時停止'; };
+showCfg();
 window.addEventListener('resize',()=>{ if(tab==='plot') drawPlot(); if(tab==='scope') drawScope(); });
 drawScope();
 </script>
