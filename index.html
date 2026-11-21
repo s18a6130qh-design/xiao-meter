@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>XIAO METER</title>
+<style>
+:root{--bg:#0b1220;--panel:#141d30;--line:#26324d;--fg:#e8eefc;--dim:#8a97b4;--acc:#4cc2ff;--yel:#ffd24a;--ok:#3ddc97;--ng:#ff6b6b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif}
+body{padding:env(safe-area-inset-top) 12px calc(env(safe-area-inset-bottom) + 12px);max-width:640px;margin:0 auto}
+header{display:flex;align-items:center;gap:8px;padding:10px 0}
+header h1{font-size:17px;margin:0;flex:1}
+#dot{width:10px;height:10px;border-radius:50%;background:var(--ng)}
+#dot.on{background:var(--ok)}
+button{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-height:44px}
+button:active{background:#1e2b47}
+button.pri{background:var(--acc);color:#04121f;border-color:var(--acc);font-weight:600}
+button.on{border-color:var(--yel);color:var(--yel)}
+#status{font-size:12px;color:var(--yel);display:flex;gap:10px;flex-wrap:wrap;min-height:18px;margin-bottom:8px}
+nav{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px}
+nav button{padding:8px 0;font-size:13px}
+nav button.sel{background:#1e2b47;border-color:var(--acc);color:var(--acc)}
+section{display:none}
+section.sel{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}
+#big{font-size:64px;font-weight:700;font-variant-numeric:tabular-nums;text-align:center;letter-spacing:-1px;line-height:1.1}
+#big small{font-size:28px;color:var(--dim);margin-left:6px}
+#rng{text-align:center;color:var(--dim);font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.stats div{font-variant-numeric:tabular-nums;font-size:17px}
+.stats span{display:block;font-size:11px;color:var(--dim)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.row button{flex:1}
+canvas{width:100%;height:260px;display:block;background:#0a101c;border-radius:10px}
+#frames{font-family:ui-monospace,Menlo,monospace;font-size:12px;max-height:340px;overflow:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5}
+#frames b{color:var(--dim);font-weight:400}
+table{width:100%;border-collapse:collapse;font-size:15px}
+td{padding:7px 0;border-bottom:1px solid var(--line)}
+td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+#msg{font-size:13px;color:var(--ng);margin:6px 0;white-space:pre-wrap}
+.note{font-size:12px;color:var(--dim);line-height:1.6}
+</style>
+</head>
+<body>
+<header>
+  <span id="dot"></span><h1>XIAO METER</h1>
+  <button id="btnConn" class="pri">接続</button>
+</header>
+<div id="status"><span id="stBat"></span><span id="stEnv"></span><span id="stFw"></span></div>
+<div id="msg"></div>
+<nav>
+  <button data-tab="volt" class="sel">電圧</button>
+  <button data-tab="plot">プロット</button>
+  <button data-tab="scope">スコープ</button>
+  <button data-tab="rs485">RS485</button>
+  <button data-tab="info">情報</button>
+</nav>
+
+<section id="volt" class="sel">
+  <div class="card">
+    <div id="big">--.---<small>V</small></div>
+    <div id="rng">未接続</div>
+  </div>
+  <div class="card stats">
+    <div><span>最小</span><b id="vMin">--</b></div>
+    <div><span>最大</span><b id="vMax">--</b></div>
+    <div><span>平均</span><b id="vAvg">--</b></div>
+  </div>
+  <div class="row"><button id="btnHold">ホールド</button><button id="btnStat">統計リセット</button></div>
+</section>
+
+<section id="plot">
+  <div class="card"><canvas id="cvPlot"></canvas></div>
+  <div class="row">
+    <button data-win="30">30秒</button><button data-win="120" class="on">2分</button><button data-win="600">10分</button>
+  </div>
+  <div class="row"><button id="btnPlotRun">停止</button><button id="btnPlotClr">クリア</button><button id="btnPlotCsv">CSV</button></div>
+  <p class="note">基板から 1 秒に 5 回届く測定値を描きます。最大 10 分ぶんを保持します。</p>
+</section>
+
+<section id="scope">
+  <div class="card"><canvas id="cvScope"></canvas></div>
+  <div class="card stats">
+    <div><span>Vpp</span><b id="scVpp">--</b></div>
+    <div><span>平均</span><b id="scAvg">--</b></div>
+    <div><span>周波数</span><b id="scFreq">--</b></div>
+  </div>
+  <div class="row"><button id="btnScRun" class="on">連続</button><button id="btnScSingle">単発</button><button id="btnScTb">間隔 --</button></div>
+  <div class="row"><button id="btnScCsv">CSV</button></div>
+  <p class="note" id="scNote">128 点。間隔は 最速（約 39µs）→ 100µs → 1ms の順に切り替わります。形が分かるのは最速で約 2.5kHz までです。</p>
+</section>
+
+<section id="rs485">
+  <div class="row"><button id="btnBaud">速度 --</button><button id="btnFrClr">クリア</button><button id="btnFrPause">一時停止</button></div>
+  <div class="card"><div id="frames">受信待ち</div></div>
+  <p class="note">基板が受信したフレームを新しい順に表示します（1 秒に最大 10 件、先頭 48 バイトまで）。</p>
+</section>
+
+<section id="info">
+  <div class="card"><table>
+    <tr><td>電池</td><td id="iBat">--</td></tr>
+    <tr><td>温度・湿度</td><td id="iEnv">--</td></tr>
+    <tr><td>本体の画面</td><td id="iMode">--</td></tr>
+    <tr><td>RS-485 速度</td><td id="iBaud">--</td></tr>
+    <tr><td>ファーム</td><td id="iFw">--</td></tr>
+    <tr><td>受信行数 / 解析エラー</td><td id="iRx">0 / 0</td></tr>
+  </table></div>
+  <p class="note">iPhone では Bluefy などの Web Bluetooth 対応ブラウザで開いてください。Safari と Chrome（iOS）は対応していません。</p>
+</section>
+
+<script>
+'use strict';
+const NUS='6e400001-b5a3-f393-e0a9-e50e24dcca9e',RXU='6e400002-b5a3-f393-e0a9-e50e24dcca9e',TXU='6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+const $=id=>document.getElementById(id);
+const MODES='VPSRI';
+let dev=null,rx=null,tx=null,connected=false,rxBuf='',dec=new TextDecoder(),enc=new TextEncoder();
+let wq=Promise.resolve(),devMode='V',tab='volt',nLines=0,nErr=0;
+let hold=false,st={min:Infinity,max:-Infinity,sum:0,n:0};
+let plot=[],plotRun=true,plotWin=120;
+let sc=null,scRun=true,scWait=false,scTimer=null,scWatch=null;
+let frames=[],frPause=false,baud=0;
+
+function msg(t){$('msg').textContent=t||'';}
+if(!navigator.bluetooth) msg('このブラウザは Web Bluetooth に対応していません。iPhone では Bluefy で開いてください。');
+
+// ---------- BLE ----------
+async function connect(){
+  msg('');
+  try{
+    dev=await navigator.bluetooth.requestDevice({filters:[{namePrefix:'XIAO-METER'},{services:[NUS]}],optionalServices:[NUS]});
+    dev.addEventListener('gattserverdisconnected',onDisc);
+    const g=await dev.gatt.connect();
+    const svc=await g.getPrimaryService(NUS);
+    tx=await svc.getCharacteristic(TXU); rx=await svc.getCharacteristic(RXU);
+    tx.addEventListener('characteristicvaluechanged',onData);
+    await tx.startNotifications();
+    connected=true; rxBuf=''; setConn();
+    setTimeout(()=>selectTab(tab),600);
+  }catch(e){ msg('接続できませんでした: '+e.message); connected=false; setConn(); }
+}
+function disconnect(){ try{dev&&dev.gatt.connected&&dev.gatt.disconnect();}catch(e){} }
+function onDisc(){ connected=false; scWait=false; clearTimeout(scTimer); clearTimeout(scWatch); setConn(); msg('切断されました'); }
+function setConn(){
+  $('dot').className=connected?'on':''; $('btnConn').textContent=connected?'切断':'接続';
+  $('btnConn').className=connected?'':'pri'; if(!connected) $('rng').textContent='未接続';
+}
+function send(c){
+  if(!connected) return Promise.resolve();
+  wq=wq.then(()=>{
+    const d=enc.encode(c);
+    return rx.writeValueWithResponse?rx.writeValueWithResponse(d):rx.writeValue(d);
+  }).catch(e=>msg('送信エラー: '+e.message));
+  return wq;
+}
+function onData(ev){
+  rxBuf+=dec.decode(ev.target.value,{stream:true});
+  let i;
+  while((i=rxBuf.indexOf('\n'))>=0){
+    const line=rxBuf.slice(0,i).trim(); rxBuf=rxBuf.slice(i+1);
+    if(!line) continue;
+    nLines++;
+    try{ handle(JSON.parse(line)); }catch(e){ nErr++; }
+  }
+  if(rxBuf.length>8000) rxBuf='';
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+// 本体の画面を target（V/P/S/R/I）に合わせる。n = 次の画面
+async function gotoMode(target){
+  for(let tries=0;tries<3&&connected;tries++){
+    if(devMode===target) return true;
+    const steps=(MODES.indexOf(target)-MODES.indexOf(devMode)+5)%5;
+    for(let k=0;k<steps;k++){ await send('n'); await sleep(120); }
+    for(let t=0;t<15&&devMode!==target;t++) await sleep(100);
+  }
+  return devMode===target;
+}
+
+// ---------- 受信処理 ----------
+function fmtV(v,r){ return (v>=0?'+':'')+v.toFixed(r===0||Math.abs(v)>=10?2:3); }
+function handle(o){
+  if(o.m!==undefined){
+    devMode=o.m;
+    if(!hold){
+      $('big').innerHTML=(o.o?'OVER':fmtV(o.v,o.r))+'<small>V</small>';
+      $('rng').textContent='レンジ r'+o.r+'（自動）'+(o.m==='S'?'・スコープ中の平均値':'');
+    }
+    if(!o.o){
+      if(!hold){ st.min=Math.min(st.min,o.v); st.max=Math.max(st.max,o.v); st.sum+=o.v; st.n++;
+        $('vMin').textContent=fmtV(st.min,1); $('vMax').textContent=fmtV(st.max,1); $('vAvg').textContent=fmtV(st.sum/st.n,1); }
+      if(plotRun){ plot.push([Date.now(),o.v]); if(plot.length>3200) plot.splice(0,plot.length-3000); }
+    }
+    if(tab==='plot') drawPlot();
+  }else if(o.st){
+    baud=o.baud;
+    const bat=o.bat.toFixed(2)+'V '+Math.min(100,o.soc).toFixed(0)+'%', env=o.tc.toFixed(1)+'℃ '+o.rh.toFixed(0)+'%';
+    $('stBat').textContent='電池 '+bat; $('stEnv').textContent=env; $('stFw').textContent='FW '+o.fw;
+    $('iBat').textContent=bat; $('iEnv').textContent=env; $('iMode').textContent=o.mode; $('iFw').textContent=o.fw;
+    $('iBaud').textContent=o.baud+' bps'; $('btnBaud').textContent='速度 '+(o.baud===38400?'38.4k':'307.2k');
+    $('iRx').textContent=nLines+' / '+nErr;
+  }else if(o.sc){
+    sc=o; scWait=false; clearTimeout(scWatch); drawScope();
+    if(tab==='scope'&&scRun) scTimer=setTimeout(scRequest,250);
+  }else if(o.fr!==undefined){
+    if(!frPause){ frames.unshift(o); if(frames.length>60) frames.length=60; if(tab==='rs485') drawFrames(); }
+  }
+}
+
+// ---------- 描画の共通 ----------
+function prep(cv){
+  const r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1;
+  if(cv.width!==Math.round(r.width*d)||cv.height!==Math.round(r.height*d)){cv.width=Math.round(r.width*d);cv.height=Math.round(r.height*d);}
+  const c=cv.getContext('2d'); c.setTransform(d,0,0,d,0,0); c.clearRect(0,0,r.width,r.height);
+  return [c,r.width,r.height];
+}
+function niceStep(span,n){ const raw=span/n,p=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/p; return (f<1.5?1:f<3.5?2:f<7.5?5:10)*p; }
+function axes(c,W,H,lo,hi,xl,xr,xunit){
+  const L=46,R=8,T=10,B=22,pw=W-L-R,ph=H-T-B;
+  c.font='11px -apple-system,sans-serif'; c.lineWidth=1;
+  const stp=niceStep(hi-lo,5),dg=Math.max(0,-Math.floor(Math.log10(stp)));
+  c.textAlign='right'; c.textBaseline='middle';
+  for(let v=Math.ceil(lo/stp)*stp;v<=hi+1e-9;v+=stp){
+    const y=T+ph-(v-lo)/(hi-lo)*ph;
+    c.strokeStyle=Math.abs(v)<stp/1e3?'#4a5a80':'#1c2740'; c.beginPath(); c.moveTo(L,y); c.lineTo(L+pw,y); c.stroke();
+    c.fillStyle='#8a97b4'; c.fillText(v.toFixed(Math.min(dg,3)),L-5,y);
+  }
+  c.textAlign='center'; c.textBaseline='top';
+  for(let k=0;k<=4;k++){
+    const x=L+pw*k/4; c.strokeStyle='#1c2740'; c.beginPath(); c.moveTo(x,T); c.lineTo(x,T+ph); c.stroke();
+    const xv=xl+(xr-xl)*k/4; c.fillStyle='#8a97b4';
+    c.fillText((Math.abs(xr-xl)<10?xv.toFixed(1):xv.toFixed(0))+(k===4?xunit:''),Math.min(x,W-18),T+ph+5);
+  }
+  return {L,T,pw,ph,x:f=>L+f*pw,y:v=>T+ph-(v-lo)/(hi-lo)*ph};
+}
+function range(mn,mx,minSpan){ let s=mx-mn; if(s<minSpan){const m=(mx+mn)/2;mn=m-minSpan/2;mx=m+minSpan/2;s=minSpan;} return [mn-s*0.1,mx+s*0.1]; }
+
+// ---------- プロット ----------
+function drawPlot(){
+  const [c,W,H]=prep($('cvPlot')); const now=plot.length&&!plotRun?plot[plot.length-1][0]:Date.now(), t0=now-plotWin*1000;
+  const pts=plot.filter(p=>p[0]>=t0);
+  let mn=Infinity,mx=-Infinity; pts.forEach(p=>{mn=Math.min(mn,p[1]);mx=Math.max(mx,p[1]);});
+  if(!pts.length){mn=0;mx=1;}
+  const [lo,hi]=range(mn,mx,0.02), a=axes(c,W,H,lo,hi,-plotWin,0,'秒');
+  if(pts.length<2) return;
+  c.strokeStyle='#4cc2ff'; c.lineWidth=1.6; c.lineJoin='round'; c.beginPath();
+  pts.forEach((p,i)=>{const x=a.x((p[0]-t0)/(plotWin*1000)),y=a.y(p[1]); i?c.lineTo(x,y):c.moveTo(x,y);}); c.stroke();
+  c.fillStyle='#ffd24a'; c.textAlign='right'; c.textBaseline='top'; c.font='13px -apple-system,sans-serif';
+  c.fillText(fmtV(pts[pts.length-1][1],1)+' V',W-12,14);
+}
+
+// ---------- スコープ ----------
+async function scRequest(){
+  clearTimeout(scTimer);
+  if(!connected||tab!=='scope'||scWait) return;
+  if(devMode!=='S'&&!(await gotoMode('S'))) { scTimer=setTimeout(scRequest,1000); return; }
+  scWait=true; send('W');
+  clearTimeout(scWatch); scWatch=setTimeout(()=>{scWait=false; if(tab==='scope'&&scRun) scRequest();},5000);
+}
+function tbName(us){ return us<70?'最速':us<500?'100µs':'1ms'; }
+function drawScope(){
+  const [c,W,H]=prep($('cvScope'));
+  if(!sc){ axes(c,W,H,0,1,0,1,''); return; }
+  const v=sc.v,n=v.length; let mn=Infinity,mx=-Infinity,sum=0; v.forEach(x=>{mn=Math.min(mn,x);mx=Math.max(mx,x);sum+=x;});
+  const avg=sum/n, totUs=sc.us*(n-1), ms=totUs>=2000, [lo,hi]=range(mn,mx,0.05);
+  const a=axes(c,W,H,lo,hi,0,ms?totUs/1000:totUs,ms?'ms':'µs');
+  c.strokeStyle='#ffd24a'; c.lineWidth=1.6; c.lineJoin='round'; c.beginPath();
+  v.forEach((y,i)=>{const X=a.x(i/(n-1)),Y=a.y(y); i?c.lineTo(X,Y):c.moveTo(X,Y);}); c.stroke();
+  c.fillStyle=sc.trig?'#3ddc97':'#8a97b4'; c.textAlign='right'; c.textBaseline='top'; c.font='12px -apple-system,sans-serif';
+  c.fillText((sc.trig?'トリガ':'フリーラン')+'・r'+sc.r+'・'+sc.us.toFixed(0)+'µs/点',W-12,14);
+  // 周波数: 平均を上向きに横切る点（ヒステリシス付き）の間隔
+  const hy=Math.max((mx-mn)*0.1,0.004); let armed=false,cross=[];
+  for(let i=1;i<n;i++){ if(v[i]<avg-hy) armed=true; else if(armed&&v[i]>avg+hy){ cross.push(i-(v[i]-avg)/(v[i]-v[i-1]||1)); armed=false; } }
+  let f='--'; if(cross.length>=2){ const per=(cross[cross.length-1]-cross[0])/(cross.length-1)*sc.us*1e-6, hz=1/per; f=hz>=1000?(hz/1000).toFixed(2)+' kHz':hz.toFixed(1)+' Hz'; }
+  $('scVpp').textContent=(mx-mn).toFixed(3)+' V'; $('scAvg').textContent=fmtV(avg,1)+' V'; $('scFreq').textContent=f;
+  $('btnScTb').textContent='間隔 '+tbName(sc.us);
+}
+
+// ---------- RS-485 ----------
+function drawFrames(){
+  if(!frames.length){ $('frames').textContent='受信待ち'; return; }
+  $('frames').innerHTML=frames.map(f=>'<b>'+(f.t/1000).toFixed(2)+'s ['+f.n+']</b> '+(f.fr.match(/../g)||[]).join(' ')+(f.n*2>f.fr.length?' …':'')).join('\n');
+}
+
+// ---------- CSV ----------
+function saveCsv(name,text){
+  const b=new Blob([text],{type:'text/csv'}),u=URL.createObjectURL(b),a=document.createElement('a');
+  a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),3000);
+}
+
+// ---------- 画面操作 ----------
+function selectTab(t){
+  tab=t;
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('sel',b.dataset.tab===t));
+  document.querySelectorAll('section').forEach(s=>s.classList.toggle('sel',s.id===t));
+  clearTimeout(scTimer);
+  if(t==='plot') drawPlot();
+  if(t==='rs485') drawFrames();
+  if(t==='scope'){ drawScope(); if(scRun) scRequest(); }
+  else if(connected&&devMode==='S') gotoMode('V');   // スコープ以外では本体を通常測定に戻す
+}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>selectTab(b.dataset.tab));
+$('btnConn').onclick=()=>connected?disconnect():connect();
+$('btnHold').onclick=()=>{hold=!hold; $('btnHold').classList.toggle('on',hold);};
+$('btnStat').onclick=()=>{st={min:Infinity,max:-Infinity,sum:0,n:0}; ['vMin','vMax','vAvg'].forEach(i=>$(i).textContent='--');};
+document.querySelectorAll('[data-win]').forEach(b=>b.onclick=()=>{plotWin=+b.dataset.win; document.querySelectorAll('[data-win]').forEach(x=>x.classList.toggle('on',x===b)); drawPlot();});
+$('btnPlotRun').onclick=()=>{plotRun=!plotRun; $('btnPlotRun').textContent=plotRun?'停止':'再開'; drawPlot();};
+$('btnPlotClr').onclick=()=>{plot=[]; drawPlot();};
+$('btnPlotCsv').onclick=()=>saveCsv('plot.csv','time_iso,volt\n'+plot.map(p=>new Date(p[0]).toISOString()+','+p[1]).join('\n'));
+$('btnScRun').onclick=()=>{scRun=!scRun; $('btnScRun').classList.toggle('on',scRun); $('btnScRun').textContent=scRun?'連続':'停止中'; if(scRun) scRequest(); else clearTimeout(scTimer);};
+$('btnScSingle').onclick=()=>{scRun=false; $('btnScRun').classList.remove('on'); $('btnScRun').textContent='停止中'; clearTimeout(scTimer); scWait=false; scRequest();};
+$('btnScTb').onclick=async()=>{ if(!connected) return; if(devMode!=='S'&&!(await gotoMode('S'))) return; await send('x'); await sleep(400); scWait=false; scRequest(); };
+$('btnScCsv').onclick=()=>{ if(sc) saveCsv('scope.csv','t_us,volt\n'+sc.v.map((y,i)=>(i*sc.us).toFixed(1)+','+y).join('\n')); };
+$('btnBaud').onclick=()=>{ send('b'); frames=[]; drawFrames(); };
+$('btnFrClr').onclick=()=>{ send('c'); frames=[]; drawFrames(); };
+$('btnFrPause').onclick=()=>{ frPause=!frPause; $('btnFrPause').classList.toggle('on',frPause); $('btnFrPause').textContent=frPause?'再開':'一時停止'; };
+window.addEventListener('resize',()=>{ if(tab==='plot') drawPlot(); if(tab==='scope') drawScope(); });
+drawScope();
+</script>
+</body>
+</html>
