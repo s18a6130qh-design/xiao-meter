@@ -164,6 +164,7 @@ button.on{background:rgba(255,214,10,.15);color:var(--yel);box-shadow:inset 0 0 
 #eT{color:#ff9f6b}#eH{color:#64d2ff}
 #logInfo{flex:0 0 auto;padding:0 4px}
 @media (max-height:520px){ #top{min-height:34px} #top b#ttl{font-size:17px} .envNow .num b{font-size:26px} .envNow .card{padding:4px 12px;display:flex;align-items:baseline;gap:10px} .sheet .modes{grid-template-columns:repeat(7,1fr)} }
+#info{overflow:auto}
 </style>
 </head>
 <body>
@@ -229,6 +230,9 @@ button.on{background:rgba(255,214,10,.15);color:var(--yel);box-shadow:inset 0 0 
     <tr><td>RS-485 速度</td><td id="iBaud">--</td></tr>
     <tr><td>ファーム</td><td id="iFw">--</td></tr>
     <tr><td>受信行数 / 解析エラー</td><td id="iRx">0 / 0</td></tr>
+    <tr><td>波形の受信 / 欠け</td><td id="iSb">0 / 0</td></tr>
+    <tr><td>アプリの版</td><td id="iApp">--</td></tr>
+  </table><div class="note" style="margin-top:6px;word-break:break-all">送った命令: <span id="iSent">--</span><br>最後のエラー: <span id="iErr">なし</span></div><table style="display:none">
   </table></div>
   <p class="note">iPhone では Bluefy などの Web Bluetooth 対応ブラウザで開いてください。Safari と Chrome（iOS）は対応していません。</p>
 </section>
@@ -246,6 +250,8 @@ button.on{background:rgba(255,214,10,.15);color:var(--yel);box-shadow:inset 0 0 
     <div class="g"><div class="knob"><button id="tbDn"><i data-ic="left"></i></button><div><span>時間 / 目盛</span><b id="tbVal">--</b></div><button id="tbUp"><i data-ic="right"></i></button></div></div>
     <div class="g"><div class="knob"><button id="vdDn"><i data-ic="minus"></i></button><div id="vdBox"><span>電圧 / 目盛（押すと自動）</span><b id="vdVal">自動</b></div><button id="vdUp"><i data-ic="plus"></i></button></div></div>
   </div>
+  <div class="lbl" style="margin-top:6px">記録の長さ（点数。長いほど細かく見えるが、更新は遅くなる）</div>
+  <div class="g"><div class="seg" id="segRl"><button data-v="128">128</button><button data-v="256">256</button><button data-v="512">512</button><button data-v="1024">1024</button></div></div>
 </div>
 <div class="sheet" id="shTrig"><button class="x"><i data-ic="close"></i></button>
   <div class="g"><div class="seg wrap" id="segTt"><button data-v="E">エッジ</button><button data-v="P">パルス幅</button><button data-v="T">タイムアウト</button><button data-v="R">ラント</button><button data-v="W">ウィンドウ</button><button data-v="S">スロープ</button><button data-v="X">RS-485</button></div></div>
@@ -299,9 +305,12 @@ let dev=null,rx=null,tx=null,connected=false,rxBuf='',dec=new TextDecoder(),enc=
 let nBad=0,wq=Promise.resolve(),devMode='V',tab='volt',nLines=0,nErr=0;
 let hold=false,st={min:Infinity,max:-Infinity,sum:0,n:0};
 let plot=[],plotRun=true,plotWin=120;
-let sc=null,scState='run',scWait=false,scTimer=null,scWatch=null,scLastId=-1,scWaiting=false,cfg={tm:'A',te:'R',tla:1,tl:0,tb:0,tp:64,tt:'E',pc:'G',pw:1000,tl2a:1,tl2:0,th:0},fwOk=true,fwNew=false,lv2Drag=null,streaming=false,lastScAt=0,fps=0,preDrag=null,tpSent=0;
+let sc=null,scState='run',scWait=false,scTimer=null,scWatch=null,scLastId=-1,scWaiting=false,cfg={tm:'A',te:'R',tla:1,tl:0,tb:0,tp:64,tt:'E',pc:'G',pw:1000,tl2a:1,tl2:0,th:0,rl:128},fwOk=true,fwRl=false,fwNew=false,lv2Drag=null,streaming=false,lastScAt=0,fps=0,preDrag=null,tpSent=0;
 let vAuto=true,vDiv=0.5,vCen=0,hZoom=1,tbSwitchAt=0,D=null,animReq=false,gesture=false;
-const US_NOM=[39.1,100,992];
+// 本体の時間軸（µs/点）。ファーム 1.10 以上は SPI 取り込みで 9 段、それより前は 3 段
+const B64T={}; 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.split('').forEach((ch,i)=>B64T[ch.charCodeAt(0)]=i);
+const US_OLD=[39.1,100,992], US_NEW=[8,10,20,50,100,200,500,1000,2000];
+let US_NOM=US_OLD;
 let curMode=0,curC=0.3,curD=0.7,mathMode='off',fftOn=false,fftHann=true,fftMark=null,measPage=0,measVals=[];
 const PWS=[20,50,100,200,500,1000,2000,5000,10000,20000,50000,100000,200000], THS=[0,1,2,5,10,20,50,100,200,500,1000];
 const TT_NOTE={E:'レベルを横切った瞬間にトリガします。',P:'パルスの幅が条件に合ったとき、パルスの終わりでトリガします（立上り＝正のパルス、立下り＝負のパルス）。',T:'レベルを越えたまま設定時間たっても戻らないとき、その時点でトリガします（信号が止まったところを探す）。',R:'低い方のレベルは越えたのに高い方に届かず戻ったパルスでトリガします。レベルは波形の右端の T と 2 を動かします。',W:'2 本のレベルの間にあった信号が外へ出たときトリガします（立上り＝上へ、立下り＝下へ）。',S:'低い方から高い方のレベルまでにかかった時間が条件に合ったときトリガします（立下りは逆向き）。',X:'RS-485 の受信が始まった瞬間にトリガします（本体の受信線を見ます。レベルは使いません）。'};
@@ -341,10 +350,17 @@ async function connect(){
 function disconnect(){ if(demo){ demoStop(); return; } try{dev&&dev.gatt.connected&&dev.gatt.disconnect();}catch(e){} }
 function onDisc(){ connected=false; streaming=false; scWait=false; clearTimeout(scTimer); clearTimeout(scWatch); setConn(); msg('切断されました'); }
 function setConn(){
+  if(!connected) keyInit=false;
   $('linkIc').className=connected?'on':''; if(!connected){ $('batFill').style.width='0'; $('batTxt').textContent='--'; } $('btnConn').textContent=connected?'切断':'接続';
   $('btnConn').className=connected?'':'pri'; $('btnDemo').style.display=connected&&!demo?'none':''; $('btnDemo').classList.toggle('on',!!demo); $('btnDemo').textContent=demo?'デモ終了':'デモ'; $('demoChip').style.display=demo?'':'none'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
+// アプリの版。情報の画面に出す（GitHub に上げた版が新しいかどうかを見分けるため）
+const APP_VER='2026-11-22 r18';
+let fwNum=0, sentLog=[], lastErr='', nSb=0, keyInit=false;
+// 本体のボタン操作など 1 文字の命令。ファーム 1.14 以上は !KEY= の行で送る（1 文字のままだと、行の一部が欠けたときに誤動作するため）
+function sendKey(k){ return send(fwNum>=1.14?'!KEY='+k+'\n':k); }
 function send(c){
+  sentLog.push(c.trim()); if(sentLog.length>8) sentLog.shift();
   if(demo){ demoCmd(c); return Promise.resolve(); }
   if(!connected) return Promise.resolve();
   // 本体が波形を送っている最中は書き込みが一時的に失敗することがあるので、3 回までやり直す
@@ -362,7 +378,7 @@ function onData(ev){
     const line=rxBuf.slice(0,i).trim(); rxBuf=rxBuf.slice(i+1);
     if(!line) continue;
     nLines++;
-    try{ handle(JSON.parse(line)); }catch(e){ nErr++; }
+    try{ handle(JSON.parse(line)); }catch(e){ nErr++; lastErr=String(e&&e.message||e).slice(0,70)+' ／ '+line.slice(0,50); }
   }
   if(rxBuf.length>8000) rxBuf='';
 }
@@ -379,6 +395,7 @@ function setSeg(id,v){ document.querySelectorAll('#'+id+' button').forEach(b=>b.
 function showCfg(){
   setSeg('segTm',cfg.tm); setSeg('segTe',cfg.te);
   $('btnLvAuto').classList.toggle('on',!!cfg.tla&&(!'RWS'.includes(cfg.tt)||!!cfg.tl2a));
+  setSeg('segRl',String(cfg.rl||128));
   const tt=cfg.tt||'E'; setSeg('segTt',tt); setSeg('segPc',cfg.pc); $('ttNote').textContent=TT_NOTE[tt];
   $('pwRow').style.display='PTS'.includes(tt)?'':'none'; $('pcBox').style.visibility='PS'.includes(tt)?'':'hidden';
   $('pwLbl').textContent=tt==='P'?'パルス幅':tt==='T'?'待つ時間':'遷移時間'; $('pwVal').textContent=fmtT(cfg.pw); $('thVal').textContent=cfg.th?fmtT(cfg.th*1000):'なし';
@@ -401,13 +418,13 @@ const DEMO_SIG=[
   {n:'立上りが遅いパルス混在（50µs と 800µs）',lo:0,hi:3.3,f:t=>{const k=Math.floor(t*250), p=((t*250)%1)*4000, tr=k%2?800:50; return p<tr?3.3*p/tr:p<2000?3.3:0;}},
   {n:'1kHz 正弦波 + 3kHz のひずみ',lo:0.5,hi:4.5,f:t=>2.5+1.5*Math.sin(2*Math.PI*1000*t)+0.3*Math.sin(2*Math.PI*3000*t)}
 ];
-const DEMO_US=[39.1,100,992];
+const DEMO_US=US_NEW;
 function demoRange(v){ v=Math.abs(v); return v<3.2?3:v<4.3?2:v<9.6?1:0; }
 function demoNoise(r){ return (Math.random()-0.5)*[0.03,0.006,0.003,0.002][r]; }
-function demoCfg(){ handle({cfg:1,tm:demo.tm,te:demo.te,tla:demo.tla,tl:demo.tl,tb:demo.tb,tp:demo.tp,stm:demo.st,mode:demo.mode,tt:demo.tt,pc:demo.pc,pw:demo.pw,tl2a:demo.tl2a,tl2:demo.tl2,th:demo.th}); }
-function demoStart(){
+function demoCfg(){ handle({cfg:1,tm:demo.tm,te:demo.te,tla:demo.tla,tl:demo.tl,tb:demo.tb,tp:demo.tp,stm:demo.st,mode:demo.mode,tt:demo.tt,pc:demo.pc,pw:demo.pw,tl2a:demo.tl2a,tl2:demo.tl2,th:demo.th,rl:demo.rl}); }
+function demoStart(){ US_NOM=US_NEW;
   if(connected&&!demo) return;
-  demo={mode:'V',tb:0,tm:'A',te:'R',tla:1,tl:2.5,tp:64,tt:'E',pc:'G',pw:1000,tl2a:1,tl2:0.5,th:0,st:0,sig:0,id:0,sent:-1,baud:38400,seq:0,zero:0,contPh:0,t0:Date.now(),tm1:[]};
+  demo={mode:'V',tb:3,tm:'A',te:'R',tla:1,tl:2.5,tp:64,tt:'E',pc:'G',pw:1000,tl2a:1,tl2:0.5,th:0,rl:128,st:0,sig:0,id:0,sent:-1,baud:38400,seq:0,zero:0,contPh:0,t0:Date.now(),tm1:[]};
   connected=true; setConn();  $('demoRow').style.display='flex';
   msg('');
   demo.tm1.push(setInterval(()=>{
@@ -419,7 +436,7 @@ function demoStart(){
       handle({c:1,s:s,ohm:ohm,v:s==='OPEN'?3.251:ohm*0.00033,ext:0.003,zero:demo.zero});
     }
   },200));
-  demo.tm1.push(setInterval(()=>handle({st:1,mode:{V:'VOLT',P:'PLOT',S:'SCOPE',R:'RS485',C:'CONT',I:'INFO'}[demo.mode],bat:4.03,soc:87,tc:26.1+1.5*Math.sin((Date.now()-demo.t0)/40000)+Math.random()*0.05,rh:31+4*Math.sin((Date.now()-demo.t0)/65000+1)+Math.random()*0.3,baud:demo.baud,fw:'1.00'}),1000));
+  demo.tm1.push(setInterval(()=>handle({st:1,mode:{V:'VOLT',P:'PLOT',S:'SCOPE',R:'RS485',C:'CONT',I:'INFO'}[demo.mode],bat:4.03,soc:87,tc:26.1+1.5*Math.sin((Date.now()-demo.t0)/40000)+Math.random()*0.05,rh:31+4*Math.sin((Date.now()-demo.t0)/65000+1)+Math.random()*0.3,baud:demo.baud,fw:'1.14'}),1000));
   demo.tm1.push(setInterval(()=>{
     const q=demo.seq++, b=[0x02,(q%4)+1,0x10+(q%3),q&255,(q*7)&255,0x03]; b.push(b.reduce((a,x)=>a^x,0));
     handle({fr:b.map(x=>x.toString(16).toUpperCase().padStart(2,'0')).join(''),n:b.length,t:Date.now()-demo.t0});
@@ -429,7 +446,7 @@ function demoStart(){
 }
 function demoStop(){ demo.tm1.forEach(clearInterval); demo=null; envShow(); connected=false; setConn(); $('demoRow').style.display='none'; msg(''); }
 function demoScope(){
-  const sg=DEMO_SIG[demo.sig], us=DEMO_US[demo.tb], r=demoRange(sg.hi), ph=Math.random()*10, N=128, PRE=demo.tp;
+  const sg=DEMO_SIG[demo.sig], us=DEMO_US[demo.tb], r=demoRange(sg.hi), ph=Math.random()*10, N=demo.rl, PRE=Math.floor(demo.tp*N/128);
   const two='RWS'.includes(demo.tt), f=i=>sg.f(ph+i*us*1e-6);
   const lv=demo.tla?(two?sg.lo+(sg.hi-sg.lo)*0.8:(sg.lo+sg.hi)/2):demo.tl, lv2=demo.tl2a?sg.lo+(sg.hi-sg.lo)*0.2:demo.tl2;
   const maxI=PRE+Math.ceil(((demo.tm==='N'?150000:50000)+demo.pw*2.5)/us);
@@ -485,11 +502,13 @@ function demoTrig(f,us,PRE,maxI,d,lv,lv2){
 }
 function demoCmd(c){
   if(c[0]==='!'){ const l=c.slice(1).trim();
+    if(l.startsWith('KEY=')){ demoCmd(l[4]); return; }
     if(l.startsWith('MODE=')) demo.mode=l[5];
     else if(l.startsWith('TM=')) demo.tm=l[3];
     else if(l.startsWith('TE=')) demo.te=l[3];
     else if(l.startsWith('TL=')){ if(l[3]==='A') demo.tla=1; else { demo.tla=0; demo.tl=parseFloat(l.slice(3)); } }
     else if(l.startsWith('TL2=')){ if(l[4]==='A') demo.tl2a=1; else { demo.tl2a=0; demo.tl2=parseFloat(l.slice(4)); } }
+    else if(l.startsWith('RL=')){ const n=parseInt(l.slice(3)); if([128,256,512,1024].includes(n)) demo.rl=n; }
     else if(l.startsWith('TT=')) demo.tt=l[3];
     else if(l.startsWith('PC=')) demo.pc=l[3];
     else if(l.startsWith('PW=')) demo.pw=parseInt(l.slice(3));
@@ -508,10 +527,21 @@ function demoCmd(c){
 function fmtV(v,r){ return (v>=0?'+':'')+v.toFixed(r===0||Math.abs(v)>=10?2:3); }
 function handle(o){
   if(o.sb){
-    // 通信で欠けた波形は使わない（d は 16 進 3 桁 × 128 点 = 384 文字のはず）
-    if(typeof o.d!=='string'||o.d.length!==384||!/^[0-9A-Fa-f]+$/.test(o.d)||!(o.m>0)){ nBad++; return; }
-    const v=new Array(128); for(let i=0;i<128;i++) v[i]=(parseInt(o.d.substr(i*3,3),16)-o.b)/o.m; o.v=v; o.sc=1; }
-  if(o.m!==undefined){
+    // 通信で欠けた波形は使わない。"e":"b"（ファーム 1.13 以上）は 1 点 2 文字で n 点。それより前は 16 進 3 桁 × 128 点
+    if(typeof o.d!=='string'||!(o.m>0)){ nBad++; return; }
+    let v;
+    if(o.e==='b'){
+      const n=o.n|0; if(n<16||o.d.length!==n*2){ nBad++; return; }
+      v=new Array(n);
+      for(let i=0;i<n;i++){ const a=B64T[o.d.charCodeAt(2*i)], b=B64T[o.d.charCodeAt(2*i+1)]; if(a===undefined||b===undefined){ nBad++; return; } v[i]=((a<<6|b)-o.b)/o.m; }
+    } else {
+      if(o.d.length!==384||!/^[0-9A-Fa-f]+$/.test(o.d)){ nBad++; return; }
+      v=new Array(128); for(let i=0;i<128;i++) v[i]=(parseInt(o.d.substr(i*3,3),16)-o.b)/o.m;
+    }
+    // sb の m は校正の傾き（数値）。電圧行の m（画面を表す文字）と同じ名前なので、ここで外しておく
+    o.v=v; o.sc=1; o.calM=o.m; delete o.m; nSb++;
+  }
+  if(typeof o.m==='string'){
     devMode=o.m;
     if(!hold){
       $('big').innerHTML=(o.o?'OVER':fmtV(o.v,o.r))+'<small>V</small>';
@@ -527,11 +557,13 @@ function handle(o){
   }else if(o.st){
     baud=o.baud;
     const bat=o.bat.toFixed(2)+'V '+Math.min(100,o.soc).toFixed(0)+'%', env=o.tc.toFixed(1)+'℃ '+o.rh.toFixed(0)+'%';
+    { const nt=parseFloat(o.fw)>=1.10?US_NEW:US_OLD; if(nt!==US_NOM){ US_NOM=nt; if((cfg.tb|0)>=US_NOM.length) cfg.tb=US_NOM.length-1; hZoom=1; } }
     const soc=Math.max(0,Math.min(100,o.soc)); $('batFill').style.width=soc+'%'; $('batTxt').textContent=soc.toFixed(0)+'%'; $('bat').className=soc<15?'low':soc<35?'mid':'';
     envFeed(o.tc,o.rh);
     $('iBat').textContent=bat; $('iEnv').textContent=env; $('iMode').textContent=o.mode; $('iFw').textContent=o.fw;
     $('iBaud').textContent=o.baud+' bps'; $('btnBaud').textContent='速度 '+(o.baud===38400?'38.4k':'307.2k');
-    $('iRx').textContent=nLines+' / '+nErr+(nBad?'（欠けた波形 '+nBad+'）':'');
+    $('iRx').textContent=nLines+' / '+nErr; $('iSb').textContent=nSb+' / '+nBad; $('iSent').textContent=sentLog.join('　')||'--'; $('iErr').textContent=lastErr||'なし';
+    fwNum=parseFloat(o.fw)||0; if(!keyInit&&fwNum>=1.14&&!demo){ keyInit=true; sendKey('u'); }   // レンジを自動に戻しておく
     if(parseFloat(o.fw)<0.99&&fwOk){ fwOk=false; msg('本体のファームが '+o.fw+' です。スコープの連続更新には 0.99 以上が必要です。'); }
   }else if(o.c){
     devMode='C'; contLast=Date.now();
@@ -541,7 +573,8 @@ function handle(o){
     $('contOhm').textContent=o.s==='VOLT'?'外部電圧 '+fmtV(o.ext,1)+' V（測定を止めています）':(o.s==='SHORT'||o.s==='R')?(o.ohm>=1000?(o.ohm/1000).toFixed(1)+' kΩ':o.ohm.toFixed(0)+' Ω')+(o.zero?'（ゼロ調整 '+o.zero.toFixed(0)+'Ω）':''):'\u00a0';
     tone(short&&tab==='cont');
   }else if(o.cfg){
-    const keep=lvDrag!==null?cfg.tl:null, keepP=preDrag!==null?cfg.tp:null; cfg=o; if(cfg.tp===undefined) cfg.tp=31; fwNew=o.tt!==undefined; if(!fwNew){ cfg.tt='E'; cfg.pc='G'; cfg.pw=1000; cfg.tl2a=1; cfg.tl2=0; cfg.th=0; } if(lv2Drag!==null){ cfg.tl2=lv2Drag; cfg.tl2a=0; } if(keep!==null) cfg.tl=keep; if(keepP!==null) cfg.tp=keepP; if(o.mode) devMode=o.mode; showCfg();
+    const keep=lvDrag!==null?cfg.tl:null, keepP=preDrag!==null?cfg.tp:null; if(o.tb>=US_NOM.length) US_NOM=US_NEW;
+    cfg=o; if(cfg.tp===undefined) cfg.tp=31; fwRl=o.rl!==undefined; if(!fwRl) cfg.rl=128; fwNew=o.tt!==undefined; if(!fwNew){ cfg.tt='E'; cfg.pc='G'; cfg.pw=1000; cfg.tl2a=1; cfg.tl2=0; cfg.th=0; } if(lv2Drag!==null){ cfg.tl2=lv2Drag; cfg.tl2a=0; } if(keep!==null) cfg.tl=keep; if(keepP!==null) cfg.tp=keepP; if(o.mode) devMode=o.mode; showCfg();
   }else if(o.scw){
     scWaiting=true; if(sc) drawScope();
   }else if(o.sc){
@@ -679,12 +712,22 @@ function mathTrace(v,us,avg){
   return null;
 }
 // FFT（128 点、スマホ側で計算）。縦軸は dBV（実効値）、横軸は 0〜サンプリング周波数の半分
+let fftCache={key:''};
 function drawFft(v,us){
   const [c,W,H]=prep($('cvFft')); const n=v.length, fs=1e6/us, K=n/2;
-  let m=0; v.forEach(x=>m+=x); m/=n;
-  const mag=new Array(K+1); let wsum=0; const w=new Array(n);
-  for(let i=0;i<n;i++){ w[i]=fftHann?0.5-0.5*Math.cos(2*Math.PI*i/n):1; wsum+=w[i]; }
-  for(let k=0;k<=K;k++){ let re=0,im=0; for(let i=0;i<n;i++){ const x=(v[i]-m)*w[i], a=2*Math.PI*k*i/n; re+=x*Math.cos(a); im-=x*Math.sin(a); } mag[k]=2*Math.hypot(re,im)/wsum; }
+  const key=(sc?sc.id:0)+'|'+n+'|'+fftHann;
+  if(fftCache.key!==key){
+    let m=0; v.forEach(x=>m+=x); m/=n;
+    const re=new Float64Array(n), im=new Float64Array(n); let wsum=0;
+    for(let i=0;i<n;i++){ const w=fftHann?0.5-0.5*Math.cos(2*Math.PI*i/n):1; wsum+=w; re[i]=(v[i]-m)*w; }
+    // 2 のべき乗の点数用の FFT（128〜1024 点）
+    for(let i=1,j=0;i<n;i++){ let bit=n>>1; for(;j&bit;bit>>=1) j^=bit; j^=bit; if(i<j){ const t=re[i]; re[i]=re[j]; re[j]=t; } }
+    for(let len=2;len<=n;len<<=1){ const ang=-2*Math.PI/len, wr=Math.cos(ang), wi=Math.sin(ang);
+      for(let i=0;i<n;i+=len){ let cr=1,ci=0; for(let k=0;k<len/2;k++){ const a=i+k,b=a+len/2, xr=re[b]*cr-im[b]*ci, xi=re[b]*ci+im[b]*cr; re[b]=re[a]-xr; im[b]=im[a]-xi; re[a]+=xr; im[a]+=xi; const t=cr*wr-ci*wi; ci=cr*wi+ci*wr; cr=t; } } }
+    const mg=new Array(K+1); for(let k=0;k<=K;k++) mg[k]=2*Math.hypot(re[k],im[k])/wsum;
+    fftCache={key:key,mag:mg};
+  }
+  const mag=fftCache.mag;
   const db=mag.map(a=>20*Math.log10(Math.max(a/Math.SQRT2,1e-7)));
   let pk=1; for(let k=2;k<K;k++) if(db[k]>db[pk]) pk=k;
   const top=Math.ceil((db[pk]+3)/10)*10, bot=top-80, L=34, B=14;
@@ -708,14 +751,14 @@ function showRun(){
   $('btnSingle').classList.toggle('on',scState==='single');
 }
 // 時間軸: 画面全体の時間 = 本体のサンプル間隔 × 127 ÷ hZoom。hZoom が範囲を外れたら本体の間隔を切り替える（見かけの倍率は連続）
-function screenTime(){ return US_NOM[cfg.tb|0]*127/hZoom; }
+function screenTime(){ return US_NOM[cfg.tb|0]*((cfg.rl||128)-1)/hZoom; }
 function normZoom(){
   const tb=cfg.tb|0, now=Date.now();
   if(now-tbSwitchAt>350){
-    if(hZoom<1&&tb<2){ hZoom*=US_NOM[tb+1]/US_NOM[tb]; cfg.tb=tb+1; tbSwitchAt=now; send('!TB='+cfg.tb+'\n'); }
+    if(hZoom<1&&tb<US_NOM.length-1){ hZoom*=US_NOM[tb+1]/US_NOM[tb]; cfg.tb=tb+1; tbSwitchAt=now; send('!TB='+cfg.tb+'\n'); }
     else if(tb>0&&hZoom>=US_NOM[tb]/US_NOM[tb-1]){ hZoom/=US_NOM[tb]/US_NOM[tb-1]; cfg.tb=tb-1; tbSwitchAt=now; send('!TB='+cfg.tb+'\n'); }
   }
-  const t2=cfg.tb|0; hZoom=Math.min(t2===0?16:US_NOM[t2]/US_NOM[t2-1]*1.3,Math.max(t2===2?1:0.7,hZoom));
+  const t2=cfg.tb|0; hZoom=Math.min(t2===0?16*(cfg.rl||128)/128:US_NOM[t2]/US_NOM[t2-1]*1.3,Math.max(t2===US_NOM.length-1?1:0.7,hZoom));
 }
 function niceNum(val,dv){ if(Math.abs(val)<dv*1e-6) return '0'; const a=Math.abs(val); return val.toFixed(dv>=1?(a%1<1e-9?0:1):dv>=0.1?1:dv>=0.01?2:3); }
 function drawScope(){
@@ -801,9 +844,10 @@ function drawScope(){
   c.font='bold 12px -apple-system,sans-serif'; c.textBaseline='top';
   let stt,col; if(scState==='stop'){stt='停止';col='#ff6b6b';} else if(!sc){stt='待機';col='#8a97b4';} else if(scWaiting){stt=cfg.tt!=='E'?TT_NAME[cfg.tt]+' 待ち':'トリガ待ち';col='#ffd24a';} else if(sc.trig){stt='トリガ済';col='#3ddc97';} else {stt='オート（トリガなし）';col='#ffd24a';}
   if(sc&&sc.cl){ stt+='　範囲外（頭が切れています）'; col='#ff6b6b'; }
+  else if(sc&&sc.lt>2){ stt+='　間隔の乱れ '+sc.lt+' 点'; }
   const tw=c.measureText(stt).width+12; c.fillStyle=col; c.fillRect(26,4,tw,18); c.fillStyle='#04121f'; c.textAlign='left'; c.fillText(stt,32,7);
   if(sc&&fps>0.3&&scState!=='stop'){ c.fillStyle='#8a97b4'; c.font='10px -apple-system,sans-serif'; c.fillText('更新 '+fps.toFixed(1)+' 回/秒',30,H-14); }
-  $('scInfoA').textContent=fmtT(D.st/NX)+'/目盛　'+fmtD(D.vDiv)+'/目盛'+(vAuto?'(自動)':''); $('scInfoT').textContent=TT_NAME[cfg.tt||'E']+(cfg.tt==='X'?'':' '+(cfg.te==='F'?'下り':cfg.te==='B'?'両方':'上り')+' '+fmtV(lv,1)+'V'+(cfg.tla?'(自動)':''))+('PS'.includes(cfg.tt)?' '+(cfg.pc==='G'?'>':'<')+fmtT(cfg.pw):cfg.tt==='T'?' '+fmtT(cfg.pw):'');
+  $('scInfoA').textContent=fmtT(D.st/NX)+'/目盛　'+fmtD(D.vDiv)+'/目盛'+(vAuto?'(自動)':'')+(sc&&n>128?'　'+n+'点':''); $('scInfoT').textContent=TT_NAME[cfg.tt||'E']+(cfg.tt==='X'?'':' '+(cfg.te==='F'?'下り':cfg.te==='B'?'両方':'上り')+' '+fmtV(lv,1)+'V'+(cfg.tla?'(自動)':''))+('PS'.includes(cfg.tt)?' '+(cfg.pc==='G'?'>':'<')+fmtT(cfg.pw):cfg.tt==='T'?' '+fmtT(cfg.pw):'');
   // 測定値
   if(sc){
     const hy=Math.max((mx-mn)*0.1,0.004); let armed=false,cross=[];
@@ -952,6 +996,7 @@ $('btnFftWin').onclick=()=>{ fftHann=!fftHann; $('btnFftWin').textContent=fftHan
   cv.addEventListener('pointerdown',e=>{ dn=true; cv.setPointerCapture(e.pointerId); mv(e); }); cv.addEventListener('pointermove',e=>{ if(dn) mv(e); }); cv.addEventListener('pointerup',()=>dn=false); cv.addEventListener('pointercancel',()=>dn=false); })();
 $('scMeas').onclick=()=>{ measPage=1-measPage; drawScope(); };
 // トリガの種類と条件（判定は本体ファーム v1.00 以上が行う）
+document.querySelectorAll('#segRl button').forEach(b=>b.onclick=()=>{ if(!connected) return; if(!fwRl){ msg('記録の長さの変更は、本体のファーム 1.13 以上が必要です。'); return; } hZoom=1; trigSet('RL','rl',+b.dataset.v); });
 function needNew(){ if(fwNew) return true; msg('このトリガは本体のファーム 1.00 以上が必要です（いまの本体は対応していません）。'); return false; }
 async function trigSet(cmd,key,val){ if(!connected) return; cfg[key]=val; showCfg(); drawScope(); await send('!'+cmd+'='+val+'\n'); if(scState!=='stop'){ scWait=false; scRequest(); } }
 document.querySelectorAll('#segTt button').forEach(b=>b.onclick=()=>{ if(b.dataset.v!=='E'&&!needNew()) return; if(!'EW'.includes(b.dataset.v)&&cfg.te==='B') trigSet('TE','te','R'); trigSet('TT','tt',b.dataset.v); });
@@ -966,11 +1011,12 @@ $('btnTpMid').onclick=()=>{ cfg.tp=64; send('!TP=64\n'); drawScope(); };
 $('btnMeas').onclick=()=>{ const off=$('scMeas').classList.toggle('off'); $('btnMeas').classList.toggle('on',!off); drawScope(); };
 $('btnScCsv').onclick=()=>{ if(sc) saveCsv('scope.csv','t_us,volt\n'+sc.v.map((y,i)=>(i*sc.us).toFixed(1)+','+y).join('\n')); };
 $('btnBeep').onclick=()=>{beep=!beep; $('btnBeep').classList.toggle('on',beep); $('btnBeep').innerHTML=ic('sound')+(beep?'音 ON':'音 OFF'); audioInit();};
-$('btnZero').onclick=()=>send('x');
-$('btnZeroClr').onclick=()=>send('X');
-$('btnBaud').onclick=()=>{ send('b'); frames=[]; drawFrames(); };
-$('btnFrClr').onclick=()=>{ send('c'); frames=[]; drawFrames(); };
+$('btnZero').onclick=()=>sendKey('x');
+$('btnZeroClr').onclick=()=>sendKey('X');
+$('btnBaud').onclick=()=>{ sendKey('b'); frames=[]; drawFrames(); };
+$('btnFrClr').onclick=()=>{ sendKey('c'); frames=[]; drawFrames(); };
 $('btnFrPause').onclick=()=>{ frPause=!frPause; $('btnFrPause').classList.toggle('on',frPause); $('btnFrPause').innerHTML=frPause?ic('play')+'再開':ic('hold')+'一時停止'; };
+$('iApp').textContent=APP_VER;
 showCfg(); showRun();
 if(!navigator.bluetooth) setTimeout(()=>{ if(!demo) demoStart(); },400);   // Bluetooth が使えない環境では自動でデモを始める
 window.addEventListener('orientationchange',()=>setTimeout(()=>{ if(tab==='env') drawEnv(); if(tab==='plot') drawPlot(); if(tab==='scope') drawScope(); },300));
