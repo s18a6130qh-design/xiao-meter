@@ -360,20 +360,24 @@ function setConn(){
   $('btnConn').className=connected?'':'pri'; $('btnDemo').style.display=connected&&!demo?'none':''; $('btnDemo').classList.toggle('on',!!demo); $('btnDemo').textContent=demo?'デモ終了':'デモ'; $('demoChip').style.display=demo?'':'none'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
 // アプリの版。情報の画面に出す（GitHub に上げた版が新しいかどうかを見分けるため）
-const APP_VER='2026-11-23 r23';
+const APP_VER='2026-11-23 r25';
 let fwNum=0, sentLog=[], lastErr='', nSb=0, keyInit=false;
 // 本体のボタン操作など 1 文字の命令。ファーム 1.14 以上は !KEY= の行で送る（1 文字のままだと、行の一部が欠けたときに誤動作するため）
 function sendKey(k){ return send(fwNum>=1.14?'!KEY='+k+'\n':k); }
+let sendSeq=0; const lastOf={};
 function send(c){
   sentLog.push(c.trim()); if(sentLog.length>8) sentLog.shift();
   if(demo){ demoCmd(c); return Promise.resolve(); }
   if(!connected) return Promise.resolve();
-  // 本体が波形を送っている最中は書き込みが一時的に失敗することがあるので、3 回までやり直す
+  // 本体が波形を送っている最中は書き込みが一時的に失敗することがあるので、やり直す（r24: 3 回 → 6 回、間隔を少しずつ延ばす。合計で約 1.5 秒）
+  // 同じ種類の設定（!TB= など）が続けて積まれたときは、最後の 1 つだけ送る（矢印の連打で古い値を送り続けない）。!KEY= は 1 回ずつ意味があるので省かない
+  const key=c.includes('=')&&!c.startsWith('!KEY')?c.split('=')[0]:null, seq=++sendSeq; if(key) lastOf[key]=seq;
   wq=wq.then(async()=>{
+    if(key&&lastOf[key]!==seq) return;
     const d=enc.encode(c); let err=null;
-    for(let k=0;k<3;k++){ try{ await (rx.writeValueWithResponse?rx.writeValueWithResponse(d):rx.writeValue(d)); return; }catch(e){ err=e; await sleep(120); } }
+    for(let k=0;k<6;k++){ try{ await (rx.writeValueWithResponse?rx.writeValueWithResponse(d):rx.writeValue(d)); return; }catch(e){ err=e; if(!connected) return; await sleep(100*(k+1)); } }
     throw err;
-  }).catch(e=>msg('送信エラー: '+e.message));
+  }).catch(e=>{ lastErr='送信 '+c.trim()+': '+((e&&(e.message||e.name))||String(e)); msg('送信できませんでした（'+c.trim()+'）。もう一度操作してください。'); });
   return wq;
 }
 function onData(ev){
@@ -817,13 +821,15 @@ function drawScope(){
   // 目盛
   c.lineWidth=1;
   for(let i=0;i<=NX;i++){ const x=Math.round(W*i/NX)+0.5; c.strokeStyle=i===NX/2?'#3a4a70':'#1c2740'; c.beginPath(); c.moveTo(x,0); c.lineTo(x,H); c.stroke(); }
-  for(let j=0;j<=NY;j++){ const y=Math.round(H*j/NY)+0.5; c.strokeStyle='#1c2740'; c.beginPath(); c.moveTo(0,y); c.lineTo(W,y); c.stroke(); }
+  // r25: 横の線は「電圧 / 目盛」の倍数（0V、1V、2V…）の位置に引く。波形を上下に動かすと、線も一緒に動く（以前は線が画面に固定で、数字が 3.7V のように半端になった）
+  const gv0=Math.ceil((D.vCen-NY/2*D.vDiv)/D.vDiv-1e-6), gv1=Math.floor((D.vCen+NY/2*D.vDiv)/D.vDiv+1e-6);
+  for(let m=gv0;m<=gv1;m++){ const y=Math.round(Y(m*D.vDiv))+0.5; c.strokeStyle='#1c2740'; c.beginPath(); c.moveTo(0,y); c.lineTo(W,y); c.stroke(); }
   // 横の太い線は 0V の位置に引く（画面の中央ではない）。0V が画面の外にあるときは引かない
   const yz=Y(0), zin=yz>=0&&yz<=H;
   if(zin){ c.strokeStyle='#5d74a8'; c.lineWidth=1.6; c.beginPath(); c.moveTo(0,Math.round(yz)+0.5); c.lineTo(W,Math.round(yz)+0.5); c.stroke(); c.lineWidth=1; }
-  c.fillStyle='#3a4a70'; if(zin) for(let i=0;i<=NX*5;i++){ c.fillRect(W*i/(NX*5)-0.5,yz-2,1,4); } for(let j=0;j<=NY*5;j++){ c.fillRect(W/2-2,H*j/(NY*5)-0.5,4,1); }
+  c.fillStyle='#3a4a70'; if(zin) for(let i=0;i<=NX*5;i++){ c.fillRect(W*i/(NX*5)-0.5,yz-2,1,4); } { const s5=D.vDiv/5, a0=Math.ceil((D.vCen-NY/2*D.vDiv)/s5-1e-6), a1=Math.floor((D.vCen+NY/2*D.vDiv)/s5+1e-6); for(let m=a0;m<=a1;m++){ c.fillRect(W/2-2,Y(m*s5)-0.5,4,1); } }
   c.font='10px -apple-system,sans-serif'; c.fillStyle='#8a97b4'; c.textAlign='left'; c.textBaseline='middle';
-  for(let j=1;j<NY;j++){ const val=D.vCen+(NY/2-j)*D.vDiv; c.fillText(niceNum(val,D.vDiv)+'V',3,H*j/NY-6); }
+  for(let m=gv0;m<=gv1;m++){ const yy=Y(m*D.vDiv); if(yy<12||yy>H-4) continue; c.fillText(niceNum(m*D.vDiv,D.vDiv)+'V',3,yy-6); }
   const y0=Y(0); if(y0>=0&&y0<=H){ c.fillStyle='#ffd24a'; c.beginPath(); c.moveTo(0,y0-5); c.lineTo(7,y0); c.lineTo(0,y0+5); c.fill(); }
   // トリガ
   const lv=lvDrag!==null?lvDrag:(sc&&cfg.tla?sc.lv:cfg.tl), yl=Y(lv);
