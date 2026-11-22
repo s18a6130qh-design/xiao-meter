@@ -355,7 +355,7 @@ function setConn(){
   $('btnConn').className=connected?'':'pri'; $('btnDemo').style.display=connected&&!demo?'none':''; $('btnDemo').classList.toggle('on',!!demo); $('btnDemo').textContent=demo?'デモ終了':'デモ'; $('demoChip').style.display=demo?'':'none'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
 // アプリの版。情報の画面に出す（GitHub に上げた版が新しいかどうかを見分けるため）
-const APP_VER='2026-11-22 r18';
+const APP_VER='2026-11-22 r19';
 let fwNum=0, sentLog=[], lastErr='', nSb=0, keyInit=false;
 // 本体のボタン操作など 1 文字の命令。ファーム 1.14 以上は !KEY= の行で送る（1 文字のままだと、行の一部が欠けたときに誤動作するため）
 function sendKey(k){ return send(fwNum>=1.14?'!KEY='+k+'\n':k); }
@@ -436,7 +436,7 @@ function demoStart(){ US_NOM=US_NEW;
       handle({c:1,s:s,ohm:ohm,v:s==='OPEN'?3.251:ohm*0.00033,ext:0.003,zero:demo.zero});
     }
   },200));
-  demo.tm1.push(setInterval(()=>handle({st:1,mode:{V:'VOLT',P:'PLOT',S:'SCOPE',R:'RS485',C:'CONT',I:'INFO'}[demo.mode],bat:4.03,soc:87,tc:26.1+1.5*Math.sin((Date.now()-demo.t0)/40000)+Math.random()*0.05,rh:31+4*Math.sin((Date.now()-demo.t0)/65000+1)+Math.random()*0.3,baud:demo.baud,fw:'1.14'}),1000));
+  demo.tm1.push(setInterval(()=>handle({st:1,mode:{V:'VOLT',P:'PLOT',S:'SCOPE',R:'RS485',C:'CONT',E:'ENV',I:'INFO'}[demo.mode],bat:4.03,soc:87,tc:26.1+1.5*Math.sin((Date.now()-demo.t0)/40000)+Math.random()*0.05,rh:31+4*Math.sin((Date.now()-demo.t0)/65000+1)+Math.random()*0.3,baud:demo.baud,fw:'1.15'}),1000));
   demo.tm1.push(setInterval(()=>{
     const q=demo.seq++, b=[0x02,(q%4)+1,0x10+(q%3),q&255,(q*7)&255,0x03]; b.push(b.reduce((a,x)=>a^x,0));
     handle({fr:b.map(x=>x.toString(16).toUpperCase().padStart(2,'0')).join(''),n:b.length,t:Date.now()-demo.t0});
@@ -563,7 +563,7 @@ function handle(o){
     $('iBat').textContent=bat; $('iEnv').textContent=env; $('iMode').textContent=o.mode; $('iFw').textContent=o.fw;
     $('iBaud').textContent=o.baud+' bps'; $('btnBaud').textContent='速度 '+(o.baud===38400?'38.4k':'307.2k');
     $('iRx').textContent=nLines+' / '+nErr; $('iSb').textContent=nSb+' / '+nBad; $('iSent').textContent=sentLog.join('　')||'--'; $('iErr').textContent=lastErr||'なし';
-    fwNum=parseFloat(o.fw)||0; if(!keyInit&&fwNum>=1.14&&!demo){ keyInit=true; sendKey('u'); }   // レンジを自動に戻しておく
+    fwNum=parseFloat(o.fw)||0; if(!keyInit&&!demo){ keyInit=true; if(fwNum>=1.14) sendKey('u'); if(tab!=='cont') syncMode(); }   // レンジを自動に戻しておく
     if(parseFloat(o.fw)<0.99&&fwOk){ fwOk=false; msg('本体のファームが '+o.fw+' です。スコープの連続更新には 0.99 以上が必要です。'); }
   }else if(o.c){
     devMode='C'; contLast=Date.now();
@@ -952,6 +952,7 @@ function sheet(id){
 document.querySelectorAll('[data-sheet]').forEach(b=>b.onclick=()=>sheet(b.dataset.sheet));
 document.querySelectorAll('.sheet .x').forEach(b=>b.onclick=()=>sheet(null));
 $('msg').onclick=()=>msg('');
+function syncMode(){ if(connected&&tab!=='scope'){ const md={volt:'V',plot:'P',cont:'C',rs485:'R',env:fwNum>=1.15?'E':'V',info:'I'}[tab]; if(md) gotoMode(md); } }
 function selectTab(t){
   tab=t; $('ttl').textContent=TAB_NAME[t]; sheet(null);
   document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('sel',b.dataset.tab===t));
@@ -963,8 +964,10 @@ function selectTab(t){
   if(t==='rs485') drawFrames();
   if(t==='scope'){ drawScope(); if(connected) send('!CFG\n'); if(scState!=='stop') scRequest(); }
   if(t!=='scope') scStopStream();
-  if(t==='cont'){ audioInit(); if(connected) gotoMode('C'); }
-  else if(t!=='scope'&&connected&&(devMode==='S'||devMode==='C')) gotoMode('V');   // 本体を通常測定に戻す（導通の測定電流も止まる）
+  // 本体の画面もアプリの画面に合わせる（スコープは scRequest が切り替える）。
+  // 温湿度の画面はファーム 1.15 以上にある。それより前の本体では電圧の画面にする。導通から離れると測定電流も止まる
+  if(t==='cont') audioInit();
+  syncMode();
   if(t!=='cont') tone(false);
 }
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>selectTab(b.dataset.tab));
