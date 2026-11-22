@@ -310,7 +310,12 @@ let vAuto=true,vDiv=0.5,vCen=0,hZoom=1,tbSwitchAt=0,D=null,animReq=false,gesture
 // 本体の時間軸（µs/点）。ファーム 1.10 以上は SPI 取り込みで 9 段、それより前は 3 段
 const B64T={}; 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.split('').forEach((ch,i)=>B64T[ch.charCodeAt(0)]=i);
 const US_OLD=[39.1,100,992], US_NEW=[8,10,20,50,100,200,500,1000,2000];
-let US_NOM=US_OLD;
+// fw 1.16 以降: 2us と 5us が増えた。本体側の番号は末尾（9、10）なので、並べ替えた表と対応表を持つ（cfg.tb は並べ替えた後の番号）
+const US_116=[2,5,8,10,20,50,100,200,500,1000,2000], TB_116=[9,10,0,1,2,3,4,5,6,7,8];
+let US_NOM=US_OLD, TBMAP=null;
+function tbFw(i){ return TBMAP?TBMAP[i]:i; }
+function tbLogical(f){ if(!TBMAP) return f; const k=TBMAP.indexOf(f); return k<0?0:k; }
+function setTbTable(nt,map){ if(nt===US_NOM) return false; US_NOM=nt; TBMAP=map; return true; }
 let curMode=0,curC=0.3,curD=0.7,mathMode='off',fftOn=false,fftHann=true,fftMark=null,measPage=0,measVals=[];
 const PWS=[20,50,100,200,500,1000,2000,5000,10000,20000,50000,100000,200000], THS=[0,1,2,5,10,20,50,100,200,500,1000];
 const TT_NOTE={E:'レベルを横切った瞬間にトリガします。',P:'パルスの幅が条件に合ったとき、パルスの終わりでトリガします（立上り＝正のパルス、立下り＝負のパルス）。',T:'レベルを越えたまま設定時間たっても戻らないとき、その時点でトリガします（信号が止まったところを探す）。',R:'低い方のレベルは越えたのに高い方に届かず戻ったパルスでトリガします。レベルは波形の右端の T と 2 を動かします。',W:'2 本のレベルの間にあった信号が外へ出たときトリガします（立上り＝上へ、立下り＝下へ）。',S:'低い方から高い方のレベルまでにかかった時間が条件に合ったときトリガします（立下りは逆向き）。',X:'RS-485 の受信が始まった瞬間にトリガします（本体の受信線を見ます。レベルは使いません）。'};
@@ -355,7 +360,7 @@ function setConn(){
   $('btnConn').className=connected?'':'pri'; $('btnDemo').style.display=connected&&!demo?'none':''; $('btnDemo').classList.toggle('on',!!demo); $('btnDemo').textContent=demo?'デモ終了':'デモ'; $('demoChip').style.display=demo?'':'none'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
 // アプリの版。情報の画面に出す（GitHub に上げた版が新しいかどうかを見分けるため）
-const APP_VER='2026-11-22 r21';
+const APP_VER='2026-11-23 r22';
 let fwNum=0, sentLog=[], lastErr='', nSb=0, keyInit=false;
 // 本体のボタン操作など 1 文字の命令。ファーム 1.14 以上は !KEY= の行で送る（1 文字のままだと、行の一部が欠けたときに誤動作するため）
 function sendKey(k){ return send(fwNum>=1.14?'!KEY='+k+'\n':k); }
@@ -422,7 +427,7 @@ const DEMO_US=US_NEW;
 function demoRange(v){ v=Math.abs(v); return v<3.2?3:v<4.3?2:v<9.6?1:0; }
 function demoNoise(r){ return (Math.random()-0.5)*[0.03,0.006,0.003,0.002][r]; }
 function demoCfg(){ handle({cfg:1,tm:demo.tm,te:demo.te,tla:demo.tla,tl:demo.tl,tb:demo.tb,tp:demo.tp,stm:demo.st,mode:demo.mode,tt:demo.tt,pc:demo.pc,pw:demo.pw,tl2a:demo.tl2a,tl2:demo.tl2,th:demo.th,rl:demo.rl}); }
-function demoStart(){ US_NOM=US_NEW;
+function demoStart(){ US_NOM=US_NEW; TBMAP=null;
   if(connected&&!demo) return;
   demo={mode:'V',tb:3,tm:'A',te:'R',tla:1,tl:2.5,tp:64,tt:'E',pc:'G',pw:1000,tl2a:1,tl2:0.5,th:0,rl:128,st:0,sig:0,id:0,sent:-1,baud:38400,seq:0,zero:0,contPh:0,t0:Date.now(),tm1:[]};
   connected=true; setConn();  $('demoRow').style.display='flex';
@@ -557,7 +562,7 @@ function handle(o){
   }else if(o.st){
     baud=o.baud;
     const bat=o.bat.toFixed(2)+'V '+Math.min(100,o.soc).toFixed(0)+'%', env=o.tc.toFixed(1)+'℃ '+o.rh.toFixed(0)+'%';
-    { const nt=parseFloat(o.fw)>=1.10?US_NEW:US_OLD; if(nt!==US_NOM){ US_NOM=nt; if((cfg.tb|0)>=US_NOM.length) cfg.tb=US_NOM.length-1; hZoom=1; } }
+    { const f=parseFloat(o.fw), nt=f>=1.16?US_116:(f>=1.10?US_NEW:US_OLD); if(setTbTable(nt,nt===US_116?TB_116:null)){ cfg.tb=cfg.tbFw!==undefined?tbLogical(cfg.tbFw):(cfg.tb|0); if((cfg.tb|0)>=US_NOM.length) cfg.tb=US_NOM.length-1; hZoom=1; } }
     const soc=Math.max(0,Math.min(100,o.soc)); $('batFill').style.width=soc+'%'; $('batTxt').textContent=soc.toFixed(0)+'%'; $('bat').className=soc<15?'low':soc<35?'mid':'';
     envFeed(o.tc,o.rh);
     $('iBat').textContent=bat; $('iEnv').textContent=env; $('iMode').textContent=o.mode; $('iFw').textContent=o.fw;
@@ -573,8 +578,8 @@ function handle(o){
     $('contOhm').textContent=o.s==='VOLT'?'外部電圧 '+fmtV(o.ext,1)+' V（測定を止めています）':(o.s==='SHORT'||o.s==='R')?(o.ohm>=1000?(o.ohm/1000).toFixed(1)+' kΩ':o.ohm.toFixed(0)+' Ω')+(o.zero?'（ゼロ調整 '+o.zero.toFixed(0)+'Ω）':''):'\u00a0';
     tone(short&&tab==='cont');
   }else if(o.cfg){
-    const keep=lvDrag!==null?cfg.tl:null, keepP=preDrag!==null?cfg.tp:null; if(o.tb>=US_NOM.length) US_NOM=US_NEW;
-    cfg=o; if(cfg.tp===undefined) cfg.tp=31; fwRl=o.rl!==undefined; if(!fwRl) cfg.rl=128; fwNew=o.tt!==undefined; if(!fwNew){ cfg.tt='E'; cfg.pc='G'; cfg.pw=1000; cfg.tl2a=1; cfg.tl2=0; cfg.th=0; } if(lv2Drag!==null){ cfg.tl2=lv2Drag; cfg.tl2a=0; } if(keep!==null) cfg.tl=keep; if(keepP!==null) cfg.tp=keepP; if(o.mode) devMode=o.mode; showCfg();
+    const keep=lvDrag!==null?cfg.tl:null, keepP=preDrag!==null?cfg.tp:null; if(o.tb>=9) setTbTable(US_116,TB_116); else if(o.tb>=US_NOM.length) setTbTable(US_NEW,null);
+    o.tbFw=o.tb; o.tb=tbLogical(o.tb); cfg=o; if(cfg.tp===undefined) cfg.tp=31; fwRl=o.rl!==undefined; if(!fwRl) cfg.rl=128; fwNew=o.tt!==undefined; if(!fwNew){ cfg.tt='E'; cfg.pc='G'; cfg.pw=1000; cfg.tl2a=1; cfg.tl2=0; cfg.th=0; } if(lv2Drag!==null){ cfg.tl2=lv2Drag; cfg.tl2a=0; } if(keep!==null) cfg.tl=keep; if(keepP!==null) cfg.tp=keepP; if(o.mode) devMode=o.mode; showCfg();
   }else if(o.scw){
     scWaiting=true; if(sc) drawScope();
   }else if(o.sc){
@@ -763,8 +768,8 @@ function screenTime(){ return US_NOM[cfg.tb|0]*((cfg.rl||128)-1)/hZoom; }
 function normZoom(){
   const tb=cfg.tb|0, now=Date.now();
   if(now-tbSwitchAt>350){
-    if(hZoom<1&&tb<US_NOM.length-1){ hZoom*=US_NOM[tb+1]/US_NOM[tb]; cfg.tb=tb+1; tbSwitchAt=now; send('!TB='+cfg.tb+'\n'); }
-    else if(tb>0&&hZoom>=US_NOM[tb]/US_NOM[tb-1]){ hZoom/=US_NOM[tb]/US_NOM[tb-1]; cfg.tb=tb-1; tbSwitchAt=now; send('!TB='+cfg.tb+'\n'); }
+    if(hZoom<1&&tb<US_NOM.length-1){ hZoom*=US_NOM[tb+1]/US_NOM[tb]; cfg.tb=tb+1; tbSwitchAt=now; send('!TB='+tbFw(cfg.tb)+'\n'); }
+    else if(tb>0&&hZoom>=US_NOM[tb]/US_NOM[tb-1]){ hZoom/=US_NOM[tb]/US_NOM[tb-1]; cfg.tb=tb-1; tbSwitchAt=now; send('!TB='+tbFw(cfg.tb)+'\n'); }
   }
   const t2=cfg.tb|0; hZoom=Math.min(t2===0?16*(cfg.rl||128)/128:US_NOM[t2]/US_NOM[t2-1]*1.3,Math.max(t2===US_NOM.length-1?1:0.7,hZoom));
 }
