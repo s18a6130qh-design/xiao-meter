@@ -445,6 +445,39 @@ button.on,.sheet button.on,#rail button.on{box-shadow:none}
 #scFocus i svg{width:18px;height:18px}
 #scope.fft.view-fft #scFocus{left:40px;bottom:20px}
 #shMore>.g:first-of-type{margin-right:40px}
+/* r31: RS-485 の送信と解読 */
+#frames{font-size:12px;line-height:1.35;white-space:normal;word-break:normal;-webkit-user-select:text;user-select:text}
+#frames .fr{display:grid;grid-template-columns:58px 26px 1fr;gap:0 6px;padding:4px 2px;border-bottom:1px solid #eef0f6;align-items:baseline}
+#frames .ft{color:#8a93a8;font-variant-numeric:tabular-nums;text-align:right}
+#frames .fd{font-family:-apple-system,sans-serif;font-size:10px;font-weight:700;text-align:center;border-radius:5px;padding:1px 0;background:#e5f8f1;color:#10866b}
+#frames .tx .fd{background:#eeedff;color:#5d55d3}
+#frames .fx{word-break:break-all;color:#263049}
+#frames .fm{grid-column:3;font-family:-apple-system,"Hiragino Sans",sans-serif;font-size:12px;color:#5d55d3}
+#frames .fm.ng{color:#d7435a}
+.sheet input{width:100%;font:16px ui-monospace,Menlo,monospace;color:#263049;background:#f7f8fc;border:1px solid #dfe3ee;border-radius:12px;padding:11px 12px;min-height:46px;outline:none;-webkit-user-select:text;user-select:text}
+.sheet input:focus{border-color:#9e97f0;background:#fff}
+#txPrev{font:12px ui-monospace,Menlo,monospace;color:#7b859b;word-break:break-all;min-height:16px;padding:0 2px}
+#txPrev.ng{color:#d7435a}
+#txPresets{display:flex;flex-wrap:wrap;gap:6px}
+#txPresets button{min-height:36px;padding:4px 10px;font:12px ui-monospace,Menlo,monospace;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#rsTxVal.on{color:#d7435a}
+#rsParVal.ng{color:#d7435a;font-weight:700}
+#btnTxSend{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600}
+#shTx .seg button.on[data-v="1"]{background:#ffe9ec;color:#d7435a}
+/* r32: ログからのコピーと登録、名前つきの登録 */
+#frames .fr{cursor:pointer}
+#frames .fr:active{background:#f0efff}
+#txPresets{display:flex;flex-direction:column;flex-wrap:nowrap;gap:5px}
+#txPresets button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-height:44px;padding:6px 10px;text-align:left;max-width:none;white-space:normal;font:inherit}
+#txPresets button b{font-size:13px;font-weight:600;color:#263049;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+#txPresets button span{font:11px ui-monospace,Menlo,monospace;color:#7b859b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+#txPresets button.sel{background:#eeedff;border-color:#b6b0f4}
+#frHex{font:13px ui-monospace,Menlo,monospace;color:#263049;word-break:break-all;background:#f7f8fc;border:1px solid #e7e9f2;border-radius:12px;padding:10px 12px;-webkit-user-select:text;user-select:text;max-height:120px;overflow:auto}
+#frHex em{display:block;font-style:normal;font-family:-apple-system,"Hiragino Sans",sans-serif;font-size:12px;color:#5d55d3;margin-top:4px}
+#shFr .g3 button{display:flex;align-items:center;justify-content:center;gap:5px;font-size:13px}
+#shFr .g3 button svg{width:17px;height:17px}
+#btnFrSave{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600}
+#msg.ok{background:#e6f8f2;color:#087e63}
 </style>
 </head>
 <body>
@@ -513,7 +546,21 @@ button.on,.sheet button.on,#rail button.on{box-shadow:none}
 </section>
 
 <section id="rs485">
-  <div class="card" style="flex:1;min-height:0;display:flex;flex-direction:column"><div id="frames">受信待ち</div></div>
+  <div class="scopeControls">
+    <button type="button" class="scopeControl" id="rsBusQuick" aria-label="通信速度を設定">
+      <span class="ctlCaption"><span class="ctlDot time"></span>BAUD</span>
+      <strong id="rsBaudVal">--</strong><small id="rsParVal">8N1</small>
+    </button>
+    <button type="button" class="scopeControl" id="rsViewQuick" aria-label="表示と解読を設定">
+      <span class="ctlCaption"><span class="ctlDot volts"></span>VIEW</span>
+      <strong id="rsViewVal">HEX</strong><small id="rsDecVal">RAW</small>
+    </button>
+    <button type="button" class="scopeControl" id="rsTxQuick" aria-label="送信">
+      <span class="ctlCaption"><span class="ctlDot trigger"></span>SEND</span>
+      <strong id="rsTxVal">OFF</strong><small id="rsCnt">0</small>
+    </button>
+  </div>
+  <div class="card" style="flex:1;min-height:0;display:flex;flex-direction:column;padding:6px 8px"><div id="frames">受信待ち</div></div>
 </section>
 
 <section id="env">
@@ -579,6 +626,37 @@ button.on,.sheet button.on,#rail button.on{box-shadow:none}
   <div class="g"><button id="btnMeas" class="on">測定値を表示</button></div>
   <div class="g g2"><button id="btnScCsv">CSV で保存</button><button id="btnScPng">PNG で保存</button></div>
 </div>
+<div class="sheet" id="shBus"><button class="x"><i data-ic="close"></i></button>
+  <div class="lbl">速度</div>
+  <div class="g"><div class="seg wrap" id="segBd"><button data-v="9600">9600</button><button data-v="19200">19200</button><button data-v="38400">38400</button><button data-v="57600">57600</button><button data-v="115200">115200</button><button data-v="230400">230400</button><button data-v="307200">307200</button></div></div>
+  <div class="lbl">パリティ</div>
+  <div class="g"><div class="seg" id="segPa"><button data-v="N">なし</button><button data-v="E">偶数</button><button data-v="O">奇数</button></div></div>
+</div>
+<div class="sheet" id="shView"><button class="x"><i data-ic="close"></i></button>
+  <div class="lbl">表示</div>
+  <div class="g"><div class="seg" id="segFv"><button data-v="hex">HEX</button><button data-v="ascii">ASCII</button></div></div>
+  <div class="lbl">解読</div>
+  <div class="g"><div class="seg" id="segDec"><button data-v="off">なし</button><button data-v="modbus">Modbus RTU</button></div></div>
+</div>
+<div class="sheet" id="shTx"><button class="x"><i data-ic="close"></i></button>
+  <div class="lbl">送信</div>
+  <div class="g"><div class="seg" id="segTxEn"><button data-v="0">切</button><button data-v="1">入</button></div></div>
+  <div class="g"><div class="seg" id="segTf"><button data-v="hex">HEX</button><button data-v="ascii">ASCII</button></div></div>
+  <div class="g"><input id="txIn" type="text" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="01 03 00 00 00 02"></div>
+  <div class="lbl">末尾に付ける</div>
+  <div class="g"><div class="seg wrap" id="segTa"><button data-v="none">なし</button><button data-v="crc">CRC16</button><button data-v="xor">XOR</button><button data-v="sum">SUM</button><button data-v="cr">CR</button><button data-v="crlf">CRLF</button></div></div>
+  <div class="g"><div id="txPrev"></div></div>
+  <div class="g"><input id="txName" type="text" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="名前" maxlength="40"></div>
+  <div class="g g3"><button id="btnTxSave">登録</button><button id="btnTxDel">削除</button><button id="btnTxSend" class="pri">送信</button></div>
+  <div class="lbl" id="txCount"></div>
+  <div class="g" id="txPresets"></div>
+</div>
+<div class="sheet" id="shFr"><button class="x"><i data-ic="close"></i></button>
+  <div class="lbl" id="frInfo"></div>
+  <div class="g"><div id="frHex"></div></div>
+  <div class="g"><input id="frName" type="text" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="名前" maxlength="40"></div>
+  <div class="g g3"><button id="btnFrCopy"><i data-ic="copy"></i>コピー</button><button id="btnFrLoad"><i data-ic="send"></i>送信欄へ</button><button id="btnFrSave" class="pri">登録</button></div>
+</div>
 <div class="sheet" id="shCont"><button class="x"><i data-ic="close"></i></button>
   <p class="note"><b style="color:var(--ng)">電源の入った回路には当てないでください。保護回路はありません。</b></p>
 </div>
@@ -590,7 +668,7 @@ button.on,.sheet button.on,#rail button.on{box-shadow:none}
   <div class="rg" data-for="plot"><button data-win="30">30秒</button><button data-win="120" class="on">2分</button><button data-win="600">10分</button><button id="btnPlotRun"><i data-ic="stop"></i>停止</button><button id="btnPlotClr"><i data-ic="trash"></i>クリア</button><button id="btnPlotCsv"><i data-ic="save"></i>CSV</button></div>
   <div class="rg sel" data-for="scope"><button id="btnRun" class="run"></button><button id="btnSingle"><i data-ic="single"></i>単発</button><button id="btnAuto"><i data-ic="auto"></i>自動</button><button data-sheet="shAxis"><i data-ic="axis"></i>時間/電圧</button><button data-sheet="shTrig"><i data-ic="trig"></i>トリガ</button><button id="btnCur"><i data-ic="curX"></i>カーソル</button><button data-sheet="shMath"><i data-ic="math"></i>演算/FFT</button><button data-sheet="shMore"><i data-ic="more"></i>その他</button></div>
   <div class="rg" data-for="cont"><button id="btnBeep" class="on"><i data-ic="sound"></i>音 ON</button><button id="btnZero"><i data-ic="zero"></i>ゼロ調整</button><button id="btnZeroClr"><i data-ic="zeroOff"></i>ゼロ解除</button><button data-sheet="shCont"><i data-ic="warn"></i>注意</button></div>
-  <div class="rg" data-for="rs485"><button id="btnBaud">速度 --</button><button id="btnFrClr"><i data-ic="trash"></i>クリア</button><button id="btnFrPause"><i data-ic="hold"></i>一時停止</button></div>
+  <div class="rg" data-for="rs485"><button data-sheet="shTx"><i data-ic="send"></i>送信</button><button id="btnFrPause"><i data-ic="hold"></i>一時停止</button><button id="btnFrClr"><i data-ic="trash"></i>クリア</button><button id="btnFrCsv"><i data-ic="save"></i>CSV</button><button data-sheet="shBus"><i data-ic="rs485"></i>速度</button><button data-sheet="shView"><i data-ic="axis"></i>表示</button></div>
   <div class="rg" data-for="env"><button id="btnLogRun"><i data-ic="rec"></i>記録開始</button><button id="btnLogInt"><i data-ic="clock"></i>間隔 10秒</button><button id="btnLogWin"><i data-ic="axis"></i>表示 全部</button><button id="btnLogCsv"><i data-ic="save"></i>CSV</button><button id="btnLogClr"><i data-ic="trash"></i>消去</button></div>
   <div class="rg" data-for="info"></div>
 </div>
@@ -623,7 +701,7 @@ let curMode=0,curC=0.3,curD=0.7,mathMode='off',fftOn=false,fftHann=true,fftMark=
 const PWS=[20,50,100,200,500,1000,2000,5000,10000,20000,50000,100000,200000], THS=[0,1,2,5,10,20,50,100,200,500,1000];
 const TT_NAME={E:'エッジ',P:'パルス幅',T:'タイムアウト',R:'ラント',W:'ウィンドウ',S:'スロープ',X:'RS-485'};
 // アイコン（すべて自作の線画。絵文字や記号文字は使わない）
-const IC_P={menu:'M4 6h16M4 12h16M4 18h16',single:'M3 12h11M10 7l5 5-5 5M19 5v14',auto:'M5 19L12 5l7 14M8 14h8',axis:'M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3',trig:'M3 18h7V6h11M7 13l3-3 3 3',curX:'M8 3v18M16 3v18',curY:'M3 8h18M3 16h18',curXY:'M8 3v18M16 3v18M3 8h18M3 16h18',math:'M2 14c1.5-7 3-7 4.5 0s3 7 4.5 0M15 8h6M18 5v6M15 17h6',hold:'M8 5v14M16 5v14',reset:'M4 12a8 8 0 1 0 2.6-5.9M4 4v5h5',warn:'M12 3l10 18H2zM12 10v5M12 18v.4',volt:'M4 17a8 8 0 0 1 16 0M12 17l4-7M3 20h18',plot:'M3 20h18M3 20V4M6 15l4-5 4 3 5-7',scope:'M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM6 12c1.5-5 3-5 4.5 0s3 5 4.5 0 2-3 3-3',cont:'M2 12h5l1.5-4 3 8 3-8 1.5 4h6',rs485:'M4 9h15l-3-3M20 15H5l3 3',info:'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v6M12 7.4v.4',close:'M6 6l12 12M18 6L6 18',minus:'M5 12h14',plus:'M5 12h14M12 5v14',edgeR:'M3 18h7V6h11M7 13l3-3 3 3',edgeF:'M3 6h7v12h11M7 11l3 3 3-3',edgeB:'M2 18h5V6h10v12h5',sound:'M4 10v4h4l5 4V6l-5 4zM17 9a4 4 0 0 1 0 6',zero:'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 9v6M9 12h6',zeroOff:'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM6.5 6.5l11 11',save:'M12 4v10M8 10l4 4 4-4M5 19h14',trash:'M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13',link:'M7 7l10 10-5 5V2l5 5L7 17',temp:'M10 14V5a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0zM12 17v-6',clock:'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 8v4l3 2',chev:'M9 5l7 7-7 7',expand:'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',shrink:'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5',brand:'M3 12h4l2-6 4 12 3-9 1.5 3H21'};
+const IC_P={menu:'M4 6h16M4 12h16M4 18h16',single:'M3 12h11M10 7l5 5-5 5M19 5v14',auto:'M5 19L12 5l7 14M8 14h8',axis:'M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3',trig:'M3 18h7V6h11M7 13l3-3 3 3',curX:'M8 3v18M16 3v18',curY:'M3 8h18M3 16h18',curXY:'M8 3v18M16 3v18M3 8h18M3 16h18',math:'M2 14c1.5-7 3-7 4.5 0s3 7 4.5 0M15 8h6M18 5v6M15 17h6',hold:'M8 5v14M16 5v14',reset:'M4 12a8 8 0 1 0 2.6-5.9M4 4v5h5',warn:'M12 3l10 18H2zM12 10v5M12 18v.4',volt:'M4 17a8 8 0 0 1 16 0M12 17l4-7M3 20h18',plot:'M3 20h18M3 20V4M6 15l4-5 4 3 5-7',scope:'M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM6 12c1.5-5 3-5 4.5 0s3 5 4.5 0 2-3 3-3',cont:'M2 12h5l1.5-4 3 8 3-8 1.5 4h6',rs485:'M4 9h15l-3-3M20 15H5l3 3',info:'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v6M12 7.4v.4',close:'M6 6l12 12M18 6L6 18',minus:'M5 12h14',plus:'M5 12h14M12 5v14',edgeR:'M3 18h7V6h11M7 13l3-3 3 3',edgeF:'M3 6h7v12h11M7 11l3 3 3-3',edgeB:'M2 18h5V6h10v12h5',sound:'M4 10v4h4l5 4V6l-5 4zM17 9a4 4 0 0 1 0 6',zero:'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 9v6M9 12h6',zeroOff:'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM6.5 6.5l11 11',save:'M12 4v10M8 10l4 4 4-4M5 19h14',trash:'M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13',link:'M7 7l10 10-5 5V2l5 5L7 17',temp:'M10 14V5a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0zM12 17v-6',clock:'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 8v4l3 2',chev:'M9 5l7 7-7 7',send:'M4 12l16-8-6 16-2.5-6.5z',copy:'M9 9h10v11H9zM5 15V4h10',expand:'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',shrink:'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5',brand:'M3 12h4l2-6 4 12 3-9 1.5 3H21'};
 const IC_F={rec:'M12 6a6 6 0 1 0 0 12 6 6 0 0 0 0-12z',stop:'M6 6h12v12H6z',play:'M8 5l11 7-11 7z',left:'M15 5l-8 7 8 7z',right:'M9 5l8 7-8 7z',more:'M5 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM19 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z'};
 function svg(n){ return IC_F[n]?'<svg viewBox="0 0 24 24"><path d="'+IC_F[n]+'" fill="currentColor"/></svg>':'<svg viewBox="0 0 24 24"><path d="'+(IC_P[n]||'')+'" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'; }
 function ic(n){ return '<i class="ic">'+svg(n)+'</i>'; }
@@ -654,7 +732,7 @@ function loadUiPrefs(){
 loadUiPrefs();
 
 let msgT=0;
-function msg(t){ $('msg').textContent=t||''; clearTimeout(msgT); if(t) msgT=setTimeout(()=>{$('msg').textContent='';},9000); }
+function msg(t,ok){ $('msg').textContent=t||''; $('msg').classList.toggle('ok',!!ok); clearTimeout(msgT); if(t) msgT=setTimeout(()=>{$('msg').textContent='';},ok?2500:9000); }
 if(!navigator.bluetooth) msg('このブラウザは Web Bluetooth に対応していません。本体につなぐには iPhone では Bluefy で開いてください。「デモ」は使えます。');
 
 // ---------- BLE ----------
@@ -673,14 +751,14 @@ async function connect(){
   }catch(e){ msg('接続できませんでした: '+e.message); connected=false; setConn(); }
 }
 function disconnect(){ if(demo){ demoStop(); return; } try{dev&&dev.gatt.connected&&dev.gatt.disconnect();}catch(e){} }
-function onDisc(){ connected=false; streaming=false; scWait=false; clearTimeout(scTimer); clearTimeout(scWatch); setConn(); msg('切断されました'); }
+function onDisc(){ if(devStore) devList(false); connected=false; streaming=false; scWait=false; clearTimeout(scTimer); clearTimeout(scWatch); setConn(); msg('切断されました'); }
 function setConn(){
   if(!connected) keyInit=false;
   $('linkIc').className=connected?'on':''; if(!connected){ $('batFill').style.width='0'; $('batTxt').textContent='--'; } $('btnConn').textContent=connected?'切断':'接続';
   $('btnConn').className=connected?'':'pri'; $('btnDemo').style.display=connected&&!demo?'none':''; $('btnDemo').classList.toggle('on',!!demo); $('btnDemo').textContent=demo?'デモ終了':'デモ'; $('demoChip').style.display=demo?'':'none'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
 // アプリの版。情報の画面に出す（GitHub に上げた版が新しいかどうかを見分けるため）
-const APP_VER='2026-11-23 r30';
+const APP_VER='2026-11-23 r34';
 let fwNum=0, sentLog=[], lastErr='', nSb=0, keyInit=false;
 // 本体のボタン操作など 1 文字の命令。ファーム 1.14 以上は !KEY= の行で送る（1 文字のままだと、行の一部が欠けたときに誤動作するため）
 function sendKey(k){ return send(fwNum>=1.14?'!KEY='+k+'\n':k); }
@@ -691,7 +769,7 @@ function send(c){
   if(!connected) return Promise.resolve();
   // 本体が波形を送っている最中は書き込みが一時的に失敗することがあるので、やり直す（r24: 3 回 → 6 回、間隔を少しずつ延ばす。合計で約 1.5 秒）
   // 同じ種類の設定（!TB= など）が続けて積まれたときは、最後の 1 つだけ送る（矢印の連打で古い値を送り続けない）。!KEY= は 1 回ずつ意味があるので省かない
-  const key=c.includes('=')&&!c.startsWith('!KEY')?c.split('=')[0]:null, seq=++sendSeq; if(key) lastOf[key]=seq;
+  const key=c.includes('=')&&!c.startsWith('!KEY')&&!c.startsWith('!TX=')&&!c.startsWith('!PS=')&&!c.startsWith('!PD=')?c.split('=')[0]:null, seq=++sendSeq; if(key) lastOf[key]=seq;
   wq=wq.then(async()=>{
     if(key&&lastOf[key]!==seq) return;
     const d=enc.encode(c); let err=null;
@@ -753,7 +831,7 @@ function demoNoise(r){ return (Math.random()-0.5)*[0.03,0.006,0.003,0.002][r]; }
 function demoCfg(){ handle({cfg:1,tm:demo.tm,te:demo.te,tla:demo.tla,tl:demo.tl,tb:demo.tb,tp:demo.tp,stm:demo.st,mode:demo.mode,tt:demo.tt,pc:demo.pc,pw:demo.pw,tl2a:demo.tl2a,tl2:demo.tl2,th:demo.th,rl:demo.rl}); }
 function demoStart(){ US_NOM=US_NEW; TBMAP=null;
   if(connected&&!demo) return;
-  demo={mode:'V',tb:3,tm:'A',te:'R',tla:1,tl:2.5,tp:64,tt:'E',pc:'G',pw:1000,tl2a:1,tl2:0.5,th:0,rl:128,st:0,sig:0,id:0,sent:-1,baud:38400,seq:0,zero:0,contPh:0,t0:Date.now(),tm1:[]};
+  demo={mode:'V',tb:3,tm:'A',te:'R',tla:1,tl:2.5,tp:64,tt:'E',pc:'G',pw:1000,tl2a:1,tl2:0.5,th:0,rl:128,st:0,sig:0,id:0,sent:-1,baud:38400,par:'N',txen:0,seq:0,zero:0,contPh:0,t0:Date.now(),tm1:[]};
   connected=true; setConn();  $('demoRow').style.display='flex';
   msg('');
   demo.tm1.push(setInterval(()=>{
@@ -765,11 +843,13 @@ function demoStart(){ US_NOM=US_NEW; TBMAP=null;
       handle({c:1,s:s,ohm:ohm,v:s==='OPEN'?3.251:ohm*0.00033,ext:0.003,zero:demo.zero});
     }
   },200));
-  demo.tm1.push(setInterval(()=>handle({st:1,mode:{V:'VOLT',P:'PLOT',S:'SCOPE',R:'RS485',C:'CONT',E:'ENV',I:'INFO'}[demo.mode],bat:4.03,soc:87,tc:26.1+1.5*Math.sin((Date.now()-demo.t0)/40000)+Math.random()*0.05,rh:31+4*Math.sin((Date.now()-demo.t0)/65000+1)+Math.random()*0.3,baud:demo.baud,fw:'1.15'}),1000));
+  demo.tm1.push(setInterval(()=>handle({st:1,mode:{V:'VOLT',P:'PLOT',S:'SCOPE',R:'RS485',C:'CONT',E:'ENV',I:'INFO'}[demo.mode],bat:4.03,soc:87,par:demo.par,txen:demo.txen?1:0,tc:26.1+1.5*Math.sin((Date.now()-demo.t0)/40000)+Math.random()*0.05,rh:31+4*Math.sin((Date.now()-demo.t0)/65000+1)+Math.random()*0.3,baud:demo.baud,fw:'1.25'}),1000));
   demo.tm1.push(setInterval(()=>{
-    const q=demo.seq++, b=[0x02,(q%4)+1,0x10+(q%3),q&255,(q*7)&255,0x03]; b.push(b.reduce((a,x)=>a^x,0));
-    handle({fr:b.map(x=>x.toString(16).toUpperCase().padStart(2,'0')).join(''),n:b.length,t:Date.now()-demo.t0});
-  },400));
+    // Modbus RTU 風のやりとり（問い合わせと応答を交互に）
+    const q=demo.seq++, ad=(q>>1)%3+1; let b=q%2===0?[ad,3,0,0x10,0,2]:[ad,3,4,(q*37)>>8&255,(q*37)&255,0,ad*10];
+    const c=crc16(b); b.push(c&255,c>>8);
+    handle({fr:bytesHex(b,''),n:b.length,t:Date.now()-demo.t0});
+  },700));
   demo.tm1.push(setInterval(()=>{ if(demo.st&&demo.mode==='S') demoScope(); },125));
   demoCfg(); selectTab(tab);
 }
@@ -832,7 +912,7 @@ function demoTrig(f,us,PRE,maxI,d,lv,lv2){
 function demoCmd(c){
   if(c[0]==='!'){ const l=c.slice(1).trim();
     if(l.startsWith('KEY=')){ demoCmd(l[4]); return; }
-    if(l.startsWith('MODE=')) demo.mode=l[5];
+    if(l.startsWith('MODE=')){ demo.mode=l[5]; if(demo.mode!=='R') demo.txen=0; }
     else if(l.startsWith('TM=')) demo.tm=l[3];
     else if(l.startsWith('TE=')) demo.te=l[3];
     else if(l.startsWith('TL=')){ if(l[3]==='A') demo.tla=1; else { demo.tla=0; demo.tl=parseFloat(l.slice(3)); } }
@@ -845,6 +925,16 @@ function demoCmd(c){
     else if(l.startsWith('TB=')) demo.tb=+l[3];
     else if(l.startsWith('TP=')) demo.tp=Math.min(123,Math.max(4,parseInt(l.slice(3))));
     else if(l.startsWith('ST=')) demo.st=+l[3];
+    else if(l.startsWith('TXEN=')){ demo.txen=l[5]==='1'&&demo.mode==='R'?1:0; return; }
+    else if(l.startsWith('BD=')){ demo.baud=parseInt(l.slice(3)); return; }
+    else if(l.startsWith('PA=')){ demo.par=l[3]; return; }
+    else if(l.startsWith('TX=')){
+      const b=hexToBytes(l.slice(3)), r=demo.mode!=='R'?-1:!demo.txen?-2:!b||b.length>64?-4:b.length; handle({tx:r});
+      if(r>0){ setTimeout(()=>{ if(demo) handle({fr:bytesHex(b,''),n:b.length,t:Date.now()-demo.t0}); },20);
+        // 保持レジスタの読出なら、それらしい応答を返す
+        if(b.length===8&&b[1]===3&&crc16(b.slice(0,6))===(b[6]|b[7]<<8)){ const q=Math.min(8,b[4]<<8|b[5]), rp=[b[0],3,q*2]; for(let i=0;i<q;i++) rp.push(0,(i+1)*11&255); const c=crc16(rp); rp.push(c&255,c>>8);
+          setTimeout(()=>{ if(demo) handle({fr:bytesHex(rp,''),n:rp.length,t:Date.now()-demo.t0}); },90); } }
+      return; }
     demoCfg(); return; }
   if(c==='W') demoScope();
   else if(c==='b') demo.baud=demo.baud===38400?307200:38400;
@@ -890,9 +980,9 @@ function handle(o){
     const soc=Math.max(0,Math.min(100,o.soc)); $('batFill').style.width=soc+'%'; $('batTxt').textContent=soc.toFixed(0)+'%'; $('bat').className=soc<15?'low':soc<35?'mid':'';
     envFeed(o.tc,o.rh);
     $('iBat').textContent=bat; $('iEnv').textContent=env; $('iMode').textContent=o.mode; $('iFw').textContent=o.fw;
-    $('iBaud').textContent=o.baud+' bps'; $('btnBaud').textContent='速度 '+(o.baud===38400?'38.4k':'307.2k');
+    $('iBaud').textContent=o.baud+' bps'; rsPar=o.par||'N'; rsUerr=o.uerr|0; if(o.txen!==undefined) txEn=!!o.txen; rsShow();
     $('iRx').textContent=nLines+' / '+nErr; $('iSb').textContent=nSb+' / '+nBad; $('iSent').textContent=sentLog.join('　')||'--'; $('iErr').textContent=lastErr||'なし';
-    fwNum=parseFloat(o.fw)||0; if(!keyInit&&!demo){ keyInit=true; if(fwNum>=1.14) sendKey('u'); if(tab!=='cont') syncMode(); }   // レンジを自動に戻しておく
+    fwNum=parseFloat(o.fw)||0; if(!keyInit&&!demo){ keyInit=true; if(fwNum>=1.14) sendKey('u'); if(tab!=='cont') syncMode(); if(fwNum>=1.26) devSync(); }   // レンジを自動に戻しておく
     if(parseFloat(o.fw)<0.99&&fwOk){ fwOk=false; msg('本体のファームが '+o.fw+' です。スコープの連続更新には 0.99 以上が必要です。'); }
   }else if(o.c){
     devMode='C'; contLast=Date.now();
@@ -916,7 +1006,29 @@ function handle(o){
     if(scState==='single'&&!scWaiting&&o.trig){ scState='stop'; showRun(); scStopStream(); }
 
   }else if(o.fr!==undefined){
-    if(!frPause){ frames.unshift(o); if(frames.length>60) frames.length=60; if(tab==='rs485') drawFrames(); }
+    // 受信回路は常に動いているので、自分が送ったものも受信として届く。直前に送った内容と同じなら「送信」として表示する
+    o.b=hexToBytes(o.fr)||[]; o.dir='RX';
+    if(lastTx&&Date.now()-lastTx.at<800&&o.fr.toUpperCase()===lastTx.hex.slice(0,o.fr.length)){ o.dir='TX'; lastTx=null; }
+    nFr++;
+    if(!frPause){ frames.unshift(o); if(frames.length>300) frames.length=300; if(tab==='rs485') drawFrames(); }
+    rsShow();
+  }else if(o.pp!==undefined){
+    if(plTmp){ const nb=hexToBytes(o.n||'')||[], db=hexToBytes(o.d||'')||[], f=o.f==='a'?'ascii':'hex';
+      plTmp.push({n:new TextDecoder().decode(new Uint8Array(nb)),t:f==='ascii'?new TextDecoder().decode(new Uint8Array(db)):bytesHex(db),f:f,a:C2A[o.a]||'none'}); }
+  }else if(o.pe!==undefined){
+    if(!o.fs){ plTmp=null; devList(false); msg('本体の保存領域が使えません。この端末に保存します'); }
+    else if(plTmp){
+      const mig=!plTmp.length&&localPresets.length?localPresets.slice():null;
+      devList(true);
+      if(mig){ // この端末にあった登録を本体へ移す（古い順に送ると、並びが保たれる）
+        txPresets=mig; for(let i=mig.length-1;i>=0;i--){ const b=presetBytes(mig[i]); if(b&&b.length&&b.length<=64) devSend('PS',mig[i]); }
+        localPresets=[]; rsSave(); txShow(); msg('この端末の登録を本体へ移しました',true); }
+    }
+  }else if(o.pk!==undefined){
+    if(!o.pk) pkBad=true; if(pkPend>0) pkPend--;
+    if(pkPend===0&&devStore&&(pkBad||o.cnt!==txPresets.length)){ msg('本体の登録を読み直します'); devSync(); }
+  }else if(o.tx!==undefined){
+    if(o.tx<=0){ lastTx=null; msg({'-1':'RS-485 の画面で送信してください','-2':'送信が切になっています','-3':'試験送信の最中です','-4':'送信データが正しくありません'}[String(o.tx)]||'送信できませんでした'); }
   }
 }
 
@@ -1292,9 +1404,87 @@ function drawScope(){
 })();
 
 // ---------- RS-485 ----------
+const TX_MAX=200; let txSel=-1, frSel=null;
+// r33: 登録は本体に保存する（ファーム 1.26 以上）。古い本体やデモでは、この端末のブラウザに保存する
+let devStore=false, localPresets=[], plTmp=null, pkPend=0, pkBad=false, rsUerr=0;
+let rsView='hex', rsDec='off', rsPar='N', txEn=false, txFmt='hex', txAdd='none', txPresets=[], lastTx=null, nFr=0;
+const RS_KEY='xiao-meter-rs-v1';
+try{ const o=JSON.parse(localStorage.getItem(RS_KEY)||'{}'); if(o.rsView==='ascii') rsView='ascii'; if(o.rsDec==='modbus') rsDec='modbus'; if(o.txFmt==='ascii') txFmt='ascii';
+  if(['none','crc','xor','sum','cr','crlf'].includes(o.txAdd)) txAdd=o.txAdd; if(Array.isArray(o.txPresets)) txPresets=o.txPresets.filter(p=>p&&typeof p.t==='string').slice(0,TX_MAX); if(typeof o.txText==='string') setTimeout(()=>{ $('txIn').value=o.txText; txShow(); },0); }catch(e){}
+localPresets=txPresets;
+function rsSave(){ if(!devStore) localPresets=txPresets; try{ localStorage.setItem(RS_KEY,JSON.stringify({rsView,rsDec,txFmt,txAdd,txPresets:localPresets,txText:$('txIn').value})); }catch(e){} }
+// ---- 本体に保存する登録 ----
+const A2C={none:'n',crc:'c',xor:'x',sum:'s',cr:'r',crlf:'l'}, C2A={n:'none',c:'crc',x:'xor',s:'sum',r:'cr',l:'crlf'};
+function cutUtf8(str,maxB){ let o=''; for(const ch of str){ if(enc.encode(o+ch).length>maxB) break; o+=ch; } return o; }
+function presetBytes(p){ return p.f==='ascii'?[...enc.encode(p.t)]:hexToBytes(p.t); }
+function presetLine(p){ return (p.f==='ascii'?'a':'h')+(A2C[p.a]||'n')+','+bytesHex([...enc.encode(p.n||'')],'')+','+bytesHex(presetBytes(p),''); }
+function devSend(cmd,p){ pkPend++; send('!'+cmd+'='+presetLine(p)+'\n'); }
+function devSync(){ if(connected&&!demo){ plTmp=[]; pkPend=0; pkBad=false; send('!PL\n'); } }
+function devList(on){ devStore=on; txPresets=on?(plTmp||[]):localPresets; plTmp=null; txSel=-1; txShow(); }
+function hexToBytes(str){ const h=String(str).replace(/0x/gi,'').replace(/[\s,:\-]/g,''); if(!h.length||h.length%2||/[^0-9a-fA-F]/.test(h)) return null; const o=[]; for(let i=0;i<h.length;i+=2) o.push(parseInt(h.substr(i,2),16)); return o; }
+function bytesHex(b,sep){ return b.map(x=>x.toString(16).toUpperCase().padStart(2,'0')).join(sep===undefined?' ':sep); }
+function bytesAscii(b){ return b.map(x=>x>=32&&x<127?String.fromCharCode(x):'.').join(''); }
+function esc(t){ return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function crc16(b){ let c=0xFFFF; for(const x of b){ c^=x; for(let i=0;i<8;i++) c=c&1?(c>>>1)^0xA001:c>>>1; } return c; }
+// Modbus RTU の解読。戻り値は {t:文, ng:CRC が合わないか}
+function decModbus(b){
+  if(b.length<4) return null;
+  const c=crc16(b.slice(0,-2)); if((c&255)!==b[b.length-2]||(c>>8)!==b[b.length-1]) return {t:'CRC NG',ng:true};
+  const ad=b[0], fc=b[1], w=i=>b[i]<<8|b[i+1], n=b.length, nm={1:'コイル',2:'入力',3:'保持レジスタ',4:'入力レジスタ'};
+  let t='#'+ad+' ';
+  if(fc&0x80) t+='例外 機能 '+(fc&0x7F)+' コード '+b[2];
+  else if(fc>=1&&fc<=4){
+    if(n===5+b[2]&&n!==8){ t+=nm[fc]+' 応答 '; if(fc>=3){ const v=[]; for(let i=3;i+1<n-2;i+=2) v.push(w(i)); t+=v.join(' '); } else t+=bytesHex(b.slice(3,-2)); }
+    else if(n===8) t+=nm[fc]+' 読出 開始 '+w(2)+' 個数 '+w(4);
+    else t+=nm[fc];
+  }
+  else if(fc===5&&n===8) t+='コイル書込 '+w(2)+' = '+(w(4)===0xFF00?'ON':'OFF');
+  else if(fc===6&&n===8) t+='レジスタ書込 '+w(2)+' = '+w(4);
+  else if((fc===15||fc===16)&&n>=8) t+=(fc===15?'コイル':'レジスタ')+'複数書込 開始 '+w(2)+' 個数 '+w(4);
+  else t+='機能 '+fc;
+  return {t:t,ng:false};
+}
+function frDecode(f){ return rsDec==='modbus'&&f.n*2<=f.fr.length?decModbus(f.b):null; }
 function drawFrames(){
   if(!frames.length){ $('frames').textContent='受信待ち'; return; }
-  $('frames').innerHTML=frames.map(f=>'<b>'+(f.t/1000).toFixed(2)+'s ['+f.n+']</b> '+(f.fr.match(/../g)||[]).join(' ')+(f.n*2>f.fr.length?' ...':'')).join('\n');
+  let fi=0; $('frames').innerHTML=frames.map(f=>{ const d=frDecode(f), cut=f.n*2>f.fr.length;
+    return '<div class="fr '+(f.dir==='TX'?'tx':'rx')+'" data-i="'+(fi++)+'"><span class="ft">'+(f.t/1000).toFixed(3)+'</span><span class="fd">'+f.dir+'</span><span class="fx">'+(rsView==='ascii'?esc(bytesAscii(f.b)):bytesHex(f.b))+(cut?' ...':'')+'</span>'+(d?'<span class="fm'+(d.ng?' ng':'')+'">'+esc(d.t)+'</span>':'')+'</div>'; }).join('');
+}
+function fmtBaud(b){ return b>=1000?(b/1000).toFixed(b%1000?1:0)+'k':String(b||'--'); }
+function rsShow(){
+  $('rsBaudVal').textContent=fmtBaud(baud); $('rsParVal').textContent='8'+rsPar+'1'+(rsUerr>0?'  ERR '+rsUerr:''); $('rsParVal').classList.toggle('ng',rsUerr>0);
+  $('rsViewVal').textContent=rsView==='ascii'?'ASCII':'HEX'; $('rsDecVal').textContent=rsDec==='modbus'?'MODBUS':'RAW';
+  $('rsTxVal').textContent=txEn?'ON':'OFF'; $('rsTxVal').classList.toggle('on',txEn); $('rsCnt').textContent=String(nFr);
+  setSeg('segBd',baud); setSeg('segPa',rsPar); setSeg('segFv',rsView); setSeg('segDec',rsDec); setSeg('segTxEn',txEn?1:0); setSeg('segTf',txFmt); setSeg('segTa',txAdd);
+}
+// 送るバイト列（入力 + 末尾に付けるもの）。入力が正しくなければ null
+function txBytes(){
+  const t=$('txIn').value; let b;
+  if(txFmt==='ascii'){ if(!t.length) return null; b=[...enc.encode(t)]; } else { b=hexToBytes(t); if(!b) return null; }
+  if(txAdd==='crc'){ const c=crc16(b); b.push(c&255,c>>8); }
+  else if(txAdd==='xor') b.push(b.reduce((a,x)=>a^x,0));
+  else if(txAdd==='sum') b.push(b.reduce((a,x)=>a+x,0)&255);
+  else if(txAdd==='cr') b.push(13);
+  else if(txAdd==='crlf') b.push(13,10);
+  return b;
+}
+function txShow(){
+  const b=txBytes(), el=$('txPrev'), empty=!$('txIn').value.trim().length;
+  el.classList.toggle('ng',!empty&&(!b||b.length>64));
+  el.textContent=empty?'':!b?'入力が正しくありません':b.length>64?'64 バイトまでです':b.length+' バイト  '+bytesHex(b);
+  const ADD={none:'',crc:' +CRC16',xor:' +XOR',sum:' +SUM',cr:' +CR',crlf:' +CRLF'};
+  $('txCount').textContent=(devStore?'本体に ':'この端末に ')+txPresets.length+' 件';
+  $('txPresets').innerHTML=txPresets.map((p,i)=>'<button data-i="'+i+'"'+(i===txSel?' class="sel"':'')+'><b>'+esc(p.n||p.t)+'</b><span>'+esc(p.t)+(ADD[p.a]||'')+'</span></button>').join('');
+  $('txPresets').querySelectorAll('button').forEach(x=>x.onclick=()=>{ txSel=+x.dataset.i; const p=txPresets[txSel]; $('txIn').value=p.t; $('txName').value=p.n||''; txFmt=p.f==='ascii'?'ascii':'hex'; txAdd=p.a||'none'; rsShow(); txShow(); rsSave(); });
+}
+function txSend(){
+  const b=txBytes();
+  if(!connected){ msg('接続していません'); return; }
+  if(!demo&&fwNum<1.25){ msg('送信には本体のファーム 1.25 以上が必要です'); return; }
+  if(!txEn){ msg('送信が切になっています'); return; }
+  if(!b){ msg('入力が正しくありません'); return; }
+  if(b.length>64){ msg('64 バイトまでです'); return; }
+  const hex=bytesHex(b,''); lastTx={hex:hex,at:Date.now()}; send('!TX='+hex+'\n'); rsSave();
 }
 
 // ---------- 導通の音 ----------
@@ -1331,6 +1521,7 @@ function selectTab(t){
   if(t==='rs485') drawFrames();
   if(t==='scope'){ drawScope(); if(connected) send('!CFG\n'); if(scState!=='stop') scRequest(); }
   if(t!=='scope') scStopStream();
+  if(t!=='rs485'&&txEn){ txEn=false; if(connected) send('!TXEN=0\n'); rsShow(); }
   // 本体の画面もアプリの画面に合わせる（スコープは scRequest が切り替える）。
   // 温湿度の画面はファーム 1.15 以上にある。それより前の本体では電圧の画面にする。導通から離れると測定電流も止まる
   if(t==='cont') audioInit();
@@ -1508,9 +1699,55 @@ $('btnScPng').onclick=()=>{
 $('btnBeep').onclick=()=>{beep=!beep; $('btnBeep').classList.toggle('on',beep); $('btnBeep').innerHTML=ic('sound')+(beep?'音 ON':'音 OFF'); audioInit();};
 $('btnZero').onclick=()=>sendKey('x');
 $('btnZeroClr').onclick=()=>sendKey('X');
-$('btnBaud').onclick=()=>{ sendKey('b'); frames=[]; drawFrames(); };
-$('btnFrClr').onclick=()=>{ sendKey('c'); frames=[]; drawFrames(); };
+$('btnFrClr').onclick=()=>{ sendKey('c'); frames=[]; nFr=0; drawFrames(); rsShow(); };
 $('btnFrPause').onclick=()=>{ frPause=!frPause; $('btnFrPause').classList.toggle('on',frPause); $('btnFrPause').innerHTML=frPause?ic('play')+'再開':ic('hold')+'一時停止'; };
+$('rsBusQuick').onclick=()=>sheet('shBus'); $('rsViewQuick').onclick=()=>sheet('shView'); $('rsTxQuick').onclick=()=>sheet('shTx');
+document.querySelectorAll('#segBd button').forEach(x=>x.onclick=()=>{ if(!connected) return; const v=+x.dataset.v;
+  if(demo||fwNum>=1.25) send('!BD='+v+'\n');
+  else if((v===38400||v===307200)&&v!==baud) sendKey('b');
+  else if(v!==baud){ msg('この速度は本体のファーム 1.25 以上が必要です'); return; }
+  baud=v; frames=[]; nFr=0; drawFrames(); rsShow(); });
+document.querySelectorAll('#segPa button').forEach(x=>x.onclick=()=>{ if(!connected) return; if(!demo&&fwNum<1.25){ msg('パリティの変更は本体のファーム 1.25 以上が必要です'); return; } rsPar=x.dataset.v; send('!PA='+rsPar+'\n'); rsShow(); });
+document.querySelectorAll('#segFv button').forEach(x=>x.onclick=()=>{ rsView=x.dataset.v; rsSave(); rsShow(); drawFrames(); });
+document.querySelectorAll('#segDec button').forEach(x=>x.onclick=()=>{ rsDec=x.dataset.v; rsSave(); rsShow(); drawFrames(); });
+document.querySelectorAll('#segTxEn button').forEach(x=>x.onclick=async()=>{ if(!connected){ msg('接続していません'); return; } if(!demo&&fwNum<1.25){ msg('送信には本体のファーム 1.25 以上が必要です'); return; }
+  const on=x.dataset.v==='1'; if(on&&devMode!=='R') await gotoMode('R'); txEn=on; send('!TXEN='+(on?1:0)+'\n'); rsShow(); });
+document.querySelectorAll('#segTf button').forEach(x=>x.onclick=()=>{ txFmt=x.dataset.v; rsShow(); txShow(); rsSave(); });
+document.querySelectorAll('#segTa button').forEach(x=>x.onclick=()=>{ txAdd=x.dataset.v; rsShow(); txShow(); rsSave(); });
+$('txIn').oninput=()=>{ txSel=-1; txShow(); };
+$('txIn').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); $('txIn').blur(); txSend(); } };
+$('btnTxSend').onclick=txSend;
+// 登録。同じ名前があれば上書き、名前がなければ同じ内容のものを上書き。新しいものが先頭
+function presetAdd(n,t,f,a){
+  n=cutUtf8((n||'').trim(),60); t=t.trim();
+  const p={n:n,t:t,f:f,a:a}, by=presetBytes(p);
+  if(!by||!by.length){ msg('入力が正しくありません'); return false; }
+  if(by.length>64){ msg('64 バイトまでです'); return false; }
+  if(f!=='ascii') p.t=t=bytesHex(by);          // 16 進は書き方をそろえる（本体に保存したものと同じ形）
+  const same=q=>n?q.n===n:(!q.n&&q.t===t&&q.f===f&&(q.a||'none')===a);
+  const had=txPresets.some(same); txPresets=txPresets.filter(q=>!same(q));
+  if(txPresets.length>=TX_MAX){ msg('登録は '+TX_MAX+' 件までです'); return false; }
+  txPresets.unshift(p); txSel=0; if(devStore) devSend('PS',p); rsSave(); txShow(); msg(had?'上書きしました':'登録しました',true); return true;
+}
+async function copyText(t){
+  try{ await navigator.clipboard.writeText(t); msg('コピーしました',true); return; }catch(e){}
+  try{ const ta=document.createElement('textarea'); ta.value=t; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.focus(); ta.select(); const ok=document.execCommand('copy'); ta.remove(); msg(ok?'コピーしました':'コピーできませんでした',ok); }catch(e){ msg('コピーできませんでした'); }
+}
+$('btnTxSave').onclick=()=>{ const t=$('txIn').value.trim(); if(!t||!txBytes()){ msg('入力が正しくありません'); return; } presetAdd($('txName').value,t,txFmt,txAdd); };
+$('btnTxDel').onclick=()=>{ const n=$('txName').value.trim(), t=$('txIn').value.trim(), k=txPresets.length;
+  const del=txPresets.filter((p,i)=>(txSel>=0?i===txSel:(n?p.n===n:p.t===t))); txPresets=txPresets.filter(p=>!del.includes(p)); if(devStore) del.forEach(p=>devSend('PD',p)); txSel=-1; rsSave(); txShow(); if(txPresets.length<k) msg('削除しました',true); };
+// ログの行を押すと、その 1 件をコピー・登録・送信欄へ移せる
+$('frames').onclick=e=>{ const r=e.target.closest('.fr'); if(!r) return; const f=frames[+r.dataset.i]; if(!f) return; frSel=f;
+  const d=frDecode(f), cut=f.n*2>f.fr.length;
+  $('frInfo').textContent=(f.t/1000).toFixed(3)+' s　'+f.dir+'　'+f.n+' バイト'+(cut?'　先頭 '+f.b.length+' バイトのみ':'');
+  $('frHex').innerHTML=bytesHex(f.b)+(d?'<em>'+esc(d.t)+'</em>':''); $('frName').value='';
+  if(!$('shFr').classList.contains('open')) sheet('shFr'); };
+$('btnFrCopy').onclick=()=>{ if(frSel) copyText(bytesHex(frSel.b)); };
+$('btnFrLoad').onclick=()=>{ if(!frSel) return; $('txIn').value=bytesHex(frSel.b); $('txName').value=$('frName').value; txFmt='hex'; txAdd='none'; txSel=-1; rsShow(); txShow(); rsSave(); sheet('shTx'); };
+$('btnFrSave').onclick=()=>{ if(!frSel) return; if(presetAdd($('frName').value,bytesHex(frSel.b),'hex','none')) sheet(null); };
+$('txName').oninput=()=>{ txSel=-1; };
+$('btnFrCsv').onclick=()=>{ if(!frames.length){ msg('記録がありません'); return; } saveCsv('rs485.csv','time_ms,dir,len,hex,decode\n'+[...frames].reverse().map(f=>{ const d=frDecode(f); return f.t+','+f.dir+','+f.n+','+bytesHex(f.b)+','+(d?'"'+d.t.replace(/"/g,'""')+'"':''); }).join('\n')); };
+rsShow(); txShow();
 $('iApp').textContent=APP_VER;
 showCfg(); showRun();
 setSeg('segMath',mathMode);
