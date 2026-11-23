@@ -462,6 +462,12 @@ button.on,.sheet button.on,#rail button.on{box-shadow:none}
 #txPresets button{min-height:36px;padding:4px 10px;font:12px ui-monospace,Menlo,monospace;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #rsTxVal.on{color:#d7435a}
 #rsParVal.ng{color:#d7435a;font-weight:700}
+#btnName{min-height:28px;padding:2px 10px;font-size:12px;border-radius:8px;margin-left:6px;background:#f1f0ff;border:1px solid #e2defe;color:#574fc7}
+#btnNameSave{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600}
+#nameInfo{font-size:12px;color:#7b859b;min-height:16px;padding:0 2px}
+#nameInfo.ng{color:#d7435a}
+#btnTxSend.dis{background:#e9ebf2;border-color:#e1e4ec;color:#a8afc0;font-weight:500}
+#rsTxVal.off{color:#a8afc0}
 #btnTxSend{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600}
 #shTx .seg button.on[data-v="1"]{background:#ffe9ec;color:#d7435a}
 /* r32: ログからのコピーと登録、名前つきの登録 */
@@ -574,6 +580,7 @@ button.on,.sheet button.on,#rail button.on{box-shadow:none}
 
 <section id="info">
   <div class="card"><table>
+    <tr><td>本体の名前</td><td><span id="iName">--</span> <button type="button" id="btnName">変更</button></td></tr>
     <tr><td>電池</td><td id="iBat">--</td></tr>
     <tr><td>温度・湿度</td><td id="iEnv">--</td></tr>
     <tr><td>本体の画面</td><td id="iMode">--</td></tr>
@@ -650,6 +657,12 @@ button.on,.sheet button.on,#rail button.on{box-shadow:none}
   <div class="g g3"><button id="btnTxSave">登録</button><button id="btnTxDel">削除</button><button id="btnTxSend" class="pri">送信</button></div>
   <div class="lbl" id="txCount"></div>
   <div class="g" id="txPresets"></div>
+</div>
+<div class="sheet" id="shName"><button class="x"><i data-ic="close"></i></button>
+  <div class="lbl">本体の名前</div>
+  <div class="g"><input id="nameIn" type="text" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="20" style="font-family:inherit"></div>
+  <div class="g"><div id="nameInfo"></div></div>
+  <div class="g g2"><button id="btnNameDef">初期の名前に戻す</button><button id="btnNameSave" class="pri">保存</button></div>
 </div>
 <div class="sheet" id="shFr"><button class="x"><i data-ic="close"></i></button>
   <div class="lbl" id="frInfo"></div>
@@ -751,14 +764,14 @@ async function connect(){
   }catch(e){ msg('接続できませんでした: '+e.message); connected=false; setConn(); }
 }
 function disconnect(){ if(demo){ demoStop(); return; } try{dev&&dev.gatt.connected&&dev.gatt.disconnect();}catch(e){} }
-function onDisc(){ if(devStore) devList(false); connected=false; streaming=false; scWait=false; clearTimeout(scTimer); clearTimeout(scWatch); setConn(); msg('切断されました'); }
+function onDisc(){ devName=''; nameShow(); if(devStore) devList(false); connected=false; streaming=false; scWait=false; clearTimeout(scTimer); clearTimeout(scWatch); setConn(); msg('切断されました'); }
 function setConn(){
   if(!connected) keyInit=false;
   $('linkIc').className=connected?'on':''; if(!connected){ $('batFill').style.width='0'; $('batTxt').textContent='--'; } $('btnConn').textContent=connected?'切断':'接続';
   $('btnConn').className=connected?'':'pri'; $('btnDemo').style.display=connected&&!demo?'none':''; $('btnDemo').classList.toggle('on',!!demo); $('btnDemo').textContent=demo?'デモ終了':'デモ'; $('demoChip').style.display=demo?'':'none'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
 // アプリの版。情報の画面に出す（GitHub に上げた版が新しいかどうかを見分けるため）
-const APP_VER='2026-11-23 r34';
+const APP_VER='2026-11-23 r35';
 let fwNum=0, sentLog=[], lastErr='', nSb=0, keyInit=false;
 // 本体のボタン操作など 1 文字の命令。ファーム 1.14 以上は !KEY= の行で送る（1 文字のままだと、行の一部が欠けたときに誤動作するため）
 function sendKey(k){ return send(fwNum>=1.14?'!KEY='+k+'\n':k); }
@@ -980,7 +993,8 @@ function handle(o){
     const soc=Math.max(0,Math.min(100,o.soc)); $('batFill').style.width=soc+'%'; $('batTxt').textContent=soc.toFixed(0)+'%'; $('bat').className=soc<15?'low':soc<35?'mid':'';
     envFeed(o.tc,o.rh);
     $('iBat').textContent=bat; $('iEnv').textContent=env; $('iMode').textContent=o.mode; $('iFw').textContent=o.fw;
-    $('iBaud').textContent=o.baud+' bps'; rsPar=o.par||'N'; rsUerr=o.uerr|0; if(o.txen!==undefined) txEn=!!o.txen; rsShow();
+    $('iBaud').textContent=o.baud+' bps'; if(o.nmh!==undefined){ const nb=hexToBytes(o.nmh); devName=nb?new TextDecoder().decode(new Uint8Array(nb)):''; nameShow(); }
+    rsPar=o.par||'N'; rsUerr=o.uerr|0; if(o.txen!==undefined) txEn=!!o.txen; rsShow();
     $('iRx').textContent=nLines+' / '+nErr; $('iSb').textContent=nSb+' / '+nBad; $('iSent').textContent=sentLog.join('　')||'--'; $('iErr').textContent=lastErr||'なし';
     fwNum=parseFloat(o.fw)||0; if(!keyInit&&!demo){ keyInit=true; if(fwNum>=1.14) sendKey('u'); if(tab!=='cont') syncMode(); if(fwNum>=1.26) devSync(); }   // レンジを自動に戻しておく
     if(parseFloat(o.fw)<0.99&&fwOk){ fwOk=false; msg('本体のファームが '+o.fw+' です。スコープの連続更新には 0.99 以上が必要です。'); }
@@ -1008,7 +1022,8 @@ function handle(o){
   }else if(o.fr!==undefined){
     // 受信回路は常に動いているので、自分が送ったものも受信として届く。直前に送った内容と同じなら「送信」として表示する
     o.b=hexToBytes(o.fr)||[]; o.dir='RX';
-    if(lastTx&&Date.now()-lastTx.at<800&&o.fr.toUpperCase()===lastTx.hex.slice(0,o.fr.length)){ o.dir='TX'; lastTx=null; }
+    { const now=Date.now(), fr=o.fr.toUpperCase(); txQ=txQ.filter(q=>now-q.at<3000);
+      for(let i=0;i<txQ.length&&o.dir==='RX';i++){ let cat=''; for(let j=i;j<txQ.length;j++){ cat+=txQ[j].hex; if(cat.slice(0,fr.length)===fr&&(fr.length===cat.length||o.n*2>o.fr.length)){ o.dir='TX'; txQ.splice(0,j+1); break; } if(cat.length>=fr.length) break; } } }
     nFr++;
     if(!frPause){ frames.unshift(o); if(frames.length>300) frames.length=300; if(tab==='rs485') drawFrames(); }
     rsShow();
@@ -1027,8 +1042,10 @@ function handle(o){
   }else if(o.pk!==undefined){
     if(!o.pk) pkBad=true; if(pkPend>0) pkPend--;
     if(pkPend===0&&devStore&&(pkBad||o.cnt!==txPresets.length)){ msg('本体の登録を読み直します'); devSync(); }
+  }else if(o.nm!==undefined){
+    msg(o.nm?'名前を保存しました。本体が再起動するので、つなぎ直してください':'この名前は使えません',!!o.nm);
   }else if(o.tx!==undefined){
-    if(o.tx<=0){ lastTx=null; msg({'-1':'RS-485 の画面で送信してください','-2':'送信が切になっています','-3':'試験送信の最中です','-4':'送信データが正しくありません'}[String(o.tx)]||'送信できませんでした'); }
+    if(o.tx<=0){ txQ.pop(); msg({'-1':'RS-485 の画面で送信してください','-2':'送信が切になっています','-3':'試験送信の最中です','-4':'送信データが正しくありません'}[String(o.tx)]||'送信できませんでした'); }
   }
 }
 
@@ -1406,6 +1423,7 @@ function drawScope(){
 // ---------- RS-485 ----------
 const TX_MAX=200; let txSel=-1, frSel=null;
 // r33: 登録は本体に保存する（ファーム 1.26 以上）。古い本体やデモでは、この端末のブラウザに保存する
+let txQ=[], devName='';
 let devStore=false, localPresets=[], plTmp=null, pkPend=0, pkBad=false, rsUerr=0;
 let rsView='hex', rsDec='off', rsPar='N', txEn=false, txFmt='hex', txAdd='none', txPresets=[], lastTx=null, nFr=0;
 const RS_KEY='xiao-meter-rs-v1';
@@ -1454,7 +1472,7 @@ function fmtBaud(b){ return b>=1000?(b/1000).toFixed(b%1000?1:0)+'k':String(b||'
 function rsShow(){
   $('rsBaudVal').textContent=fmtBaud(baud); $('rsParVal').textContent='8'+rsPar+'1'+(rsUerr>0?'  ERR '+rsUerr:''); $('rsParVal').classList.toggle('ng',rsUerr>0);
   $('rsViewVal').textContent=rsView==='ascii'?'ASCII':'HEX'; $('rsDecVal').textContent=rsDec==='modbus'?'MODBUS':'RAW';
-  $('rsTxVal').textContent=txEn?'ON':'OFF'; $('rsTxVal').classList.toggle('on',txEn); $('rsCnt').textContent=String(nFr);
+  $('rsTxVal').textContent=txEn?'ON':'OFF'; $('rsTxVal').classList.toggle('on',txEn); $('rsTxVal').classList.toggle('off',!txEn); $('btnTxSend').classList.toggle('dis',!txEn); $('rsCnt').textContent=String(nFr);
   setSeg('segBd',baud); setSeg('segPa',rsPar); setSeg('segFv',rsView); setSeg('segDec',rsDec); setSeg('segTxEn',txEn?1:0); setSeg('segTf',txFmt); setSeg('segTa',txAdd);
 }
 // 送るバイト列（入力 + 末尾に付けるもの）。入力が正しくなければ null
@@ -1484,7 +1502,7 @@ function txSend(){
   if(!txEn){ msg('送信が切になっています'); return; }
   if(!b){ msg('入力が正しくありません'); return; }
   if(b.length>64){ msg('64 バイトまでです'); return; }
-  const hex=bytesHex(b,''); lastTx={hex:hex,at:Date.now()}; send('!TX='+hex+'\n'); rsSave();
+  const hex=bytesHex(b,''); txQ.push({hex:hex,at:Date.now()}); if(txQ.length>20) txQ.shift(); send('!TX='+hex+'\n'); rsSave();
 }
 
 // ---------- 導通の音 ----------
@@ -1747,7 +1765,15 @@ $('btnFrLoad').onclick=()=>{ if(!frSel) return; $('txIn').value=bytesHex(frSel.b
 $('btnFrSave').onclick=()=>{ if(!frSel) return; if(presetAdd($('frName').value,bytesHex(frSel.b),'hex','none')) sheet(null); };
 $('txName').oninput=()=>{ txSel=-1; };
 $('btnFrCsv').onclick=()=>{ if(!frames.length){ msg('記録がありません'); return; } saveCsv('rs485.csv','time_ms,dir,len,hex,decode\n'+[...frames].reverse().map(f=>{ const d=frDecode(f); return f.t+','+f.dir+','+f.n+','+bytesHex(f.b)+','+(d?'"'+d.t.replace(/"/g,'""')+'"':''); }).join('\n')); };
-rsShow(); txShow();
+// ---- 本体の名前 ----
+function nameShow(){ $('iName').textContent=devName||'--'; document.querySelector('.brandname').textContent=connected&&devName?devName:'XIAO METER'; }
+function nameCheck(){ const t=$('nameIn').value.trim(), n=enc.encode(t).length, el=$('nameInfo'); const ok=n>=1&&n<=20&&!/[\x00-\x1f\x7f]/.test(t);
+  el.textContent=t?n+' / 20 バイト':''; el.classList.toggle('ng',!!t&&!ok); return ok?t:null; }
+$('btnName').onclick=()=>{ if(!connected||demo){ msg('本体につないでから変更してください'); return; } if(fwNum<1.29){ msg('名前の変更は本体のファーム 1.29 以上が必要です'); return; } $('nameIn').value=devName; nameCheck(); sheet('shName'); };
+$('nameIn').oninput=nameCheck;
+$('btnNameSave').onclick=()=>{ const t=nameCheck(); if(!t){ msg('1〜20 バイトで入力してください'); return; } send('!NAME='+bytesHex([...enc.encode(t)],'')+'\n'); sheet(null); };
+$('btnNameDef').onclick=()=>{ send('!NAME=\n'); sheet(null); };
+rsShow(); txShow(); nameShow();
 $('iApp').textContent=APP_VER;
 showCfg(); showRun();
 setSeg('segMath',mathMode);
