@@ -306,9 +306,6 @@ section{gap:7px}
   #scMeas div{padding:9px 6px;text-align:left}
   #scMeas span{font-size:10px}
   #scMeas b{font-size:clamp(12px,3.5vw,17px)}
-  #scope.fft:not(.view-fft) #fftWrap{display:none!important}
-  #scope.fft.view-fft #scopeWaveWrap{display:none!important}
-  #scope.fft.view-fft #fftWrap,#scope.fft:not(.view-fft) #scopeWaveWrap{flex:1 1 auto;width:100%}
   #scViews{margin:-1px auto}
   .sheet{left:3px;right:3px;bottom:4px;max-height:calc(100% - 8px);padding:18px 8px 10px}
   .sheet .knob{grid-template-columns:42px 1fr 42px}
@@ -343,8 +340,6 @@ body.scope-focus #scope #scMeas,body.scope-focus #scope #scCur,body.scope-focus 
 body.scope-focus #scPlotArea{min-height:0}
 body.scope-focus #scopeWaveWrap,body.scope-focus #fftWrap{border-radius:0}
 body.scope-focus #scFocusExit{display:flex;position:absolute;right:15px;top:12px;z-index:25;min-height:34px;padding:5px 11px;background:rgba(16,26,41,.86);border:1px solid #3a5873;border-radius:8px;font-size:12px;align-items:center;gap:5px}
-body.scope-focus #scope.fft.view-fft #fftWrap,body.scope-focus #scope.fft:not(.view-fft) #scopeWaveWrap{flex:1 1 auto;width:100%}
-body.scope-focus #scope.fft.view-fft #scopeWaveWrap,body.scope-focus #scope.fft:not(.view-fft) #fftWrap{display:none!important}
 
 /* Mobile app visual system — light surfaces, indigo navigation, dark instrument display */
 :root{--bg:#f5f6fb;--panel:#ffffff;--line:#e5e8f1;--fg:#20283b;--dim:#7b859b;--acc:#635bdf;--yel:#ffcc52;--ok:#16ad87;--ng:#e4546b}
@@ -443,7 +438,6 @@ button.on,.sheet button.on,#rail button.on{box-shadow:none}
 #scFocus{position:absolute;left:8px;bottom:8px;z-index:6;width:34px;height:34px;min-height:0;padding:0;border-radius:9px;background:rgba(20,30,52,.72);border:1px solid #3a4c6e;color:#d5e3ff;display:flex;align-items:center;justify-content:center}
 #scFocus:active{background:rgba(60,80,130,.85)}
 #scFocus i svg{width:18px;height:18px}
-#scope.fft.view-fft #scFocus{left:40px;bottom:20px}
 #shMore>.g:first-of-type{margin-right:40px}
 /* r31: RS-485 の送信と解読 */
 #frames{font-size:12px;line-height:1.35;white-space:normal;word-break:normal;-webkit-user-select:text;user-select:text}
@@ -484,6 +478,49 @@ button.on,.sheet button.on,#rail button.on{box-shadow:none}
 #shFr .g3 button svg{width:17px;height:17px}
 #btnFrSave{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600}
 #msg.ok{background:#e6f8f2;color:#087e63}
+
+/* r37: iOS が横画面で文字を自動で大きくするのを止める（崩れの主因と推測） */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+/* r37: FFT は波形と同時に表示。縦画面は上下、横画面は左右 */
+#scope.fft #scopeWaveWrap,#scope.fft #fftWrap{display:block}
+#scope.fft #scopeWaveWrap{flex:1.15 1 0}
+#scope.fft #fftWrap{flex:1 1 0}
+@media (orientation:portrait){
+  #scope.fft #scPlotArea{flex-direction:column}
+  #scope.fft #scFocus{left:auto;right:8px;top:8px;bottom:auto}
+}
+/* r37: 背の低い横画面（スマホの横向き）を詰める */
+@media (orientation:landscape) and (max-height:500px){
+  :root{--rail:128px}
+  #top{min-height:30px;padding:2px 10px}
+  .brandmark{width:22px;height:22px;flex-basis:22px;border-radius:6px}
+  .brandmark i svg{width:15px;height:15px}
+  #btnConn{min-height:24px;padding:1px 10px;font-size:12px}
+  #stage{padding:4px 4px 4px 6px}
+  section{gap:4px}
+  #scope{gap:3px}
+  .scopeControls{min-height:0;height:28px;flex:0 0 28px;gap:4px}
+  .scopeControl{flex-direction:row;align-items:center;justify-content:flex-start;gap:7px;padding:0 9px;min-height:0;height:28px;border-radius:9px;box-shadow:none}
+  .scopeControl strong{font-size:14px;line-height:1.3}
+  #scTrQuickVal{font-size:13px}
+  #scTrQuickVal i svg{width:14px;height:14px}
+  .scopeControl .ctlCaption{font-size:9px;letter-spacing:.3px}
+  .scopeControl small{display:none}
+  .scopeStatus{flex-basis:15px;font-size:10px}
+  .scopeStatus b{font-size:10px}
+  .measTitle{display:none}
+  #scMeas{min-height:0;gap:4px}
+  #scMeas>div{flex:0 0 auto;padding:3px 8px;border-radius:8px;box-shadow:none;display:flex;gap:5px;align-items:baseline;justify-content:flex-start}
+  #scMeas span{font-size:9px;margin:0}
+  #scMeas b{font-size:13px}
+  #scCur{padding:2px 8px;font-size:11px}
+  #rail{padding:4px 5px 4px 3px;gap:4px}
+  #rail>button{flex-basis:28px;font-size:11px}
+  #rail .rg.sel{grid-auto-rows:minmax(34px,1fr);gap:4px}
+  #rail .rg button{font-size:10px;gap:2px;border-radius:9px}
+  #rail .rg button i svg{width:17px;height:17px}
+  #scFocus{width:30px;height:30px;left:6px;bottom:6px}
+}
 </style>
 </head>
 <body>
@@ -539,7 +576,6 @@ button.on,.sheet button.on,#rail button.on{box-shadow:none}
     <div class="cw" id="scopeWaveWrap"><canvas id="cvScope"></canvas></div>
     <div class="cw" id="fftWrap" style="display:none"><canvas id="cvFft" style="touch-action:none"></canvas></div>
   </div>
-  <div id="scViews" style="display:none" aria-label="波形表示切替"><button type="button" id="scWaveTab" class="selected">波形</button><button type="button" id="scFftTab">FFT</button></div>
   <div id="scCur"></div>
   <div class="measTitle"><span><span class="measDot"></span> 自動測定</span></div>
   <div id="scMeas" aria-label="測定値"></div>
@@ -771,7 +807,7 @@ function setConn(){
   $('btnConn').className=connected?'':'pri'; $('btnDemo').style.display=connected&&!demo?'none':''; $('btnDemo').classList.toggle('on',!!demo); $('btnDemo').textContent=demo?'デモ終了':'デモ'; $('demoChip').style.display=demo?'':'none'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
 // アプリの版。情報の画面に出す（GitHub に上げた版が新しいかどうかを見分けるため）
-const APP_VER='2026-11-23 r35';
+const APP_VER='2026-11-25 r37';
 let fwNum=0, sentLog=[], lastErr='', nSb=0, keyInit=false;
 // 本体のボタン操作など 1 文字の命令。ファーム 1.14 以上は !KEY= の行で送る（1 文字のままだと、行の一部が欠けたときに誤動作するため）
 function sendKey(k){ return send(fwNum>=1.14?'!KEY='+k+'\n':k); }
@@ -974,7 +1010,7 @@ function handle(o){
     o.v=v; o.sc=1; o.calM=o.m; delete o.m; nSb++;
   }
   if(typeof o.m==='string'){
-    devMode=o.m;
+    devMode=o.m; followDev();
     if(!hold){
       $('big').innerHTML=(o.o?'OVER':fmtV(o.v,o.r))+'<small>V</small>';
       $('sub').innerHTML='<span class="chip">レンジ '+RNG[o.r]+'</span><span class="chip dim">分解能 '+RES[o.r]+'</span>'+(o.o?'<span class="chip warn">入力が範囲外</span>':'')+(o.m==='S'?'<span class="chip warn">スコープ動作中</span>':'')+(hold?'<span class="chip warn">ホールド中</span>':'');
@@ -1527,8 +1563,20 @@ document.querySelectorAll('[data-sheet]').forEach(b=>b.onclick=()=>sheet(b.datas
 document.querySelectorAll('.sheet .x').forEach(b=>b.onclick=()=>sheet(null));
 $('msg').onclick=()=>msg('');
 function syncMode(){ if(connected&&tab!=='scope'){ const md={volt:'V',plot:'P',cont:'C',rs485:'R',env:fwNum>=1.15?'E':'V',info:'I'}[tab]; if(md) gotoMode(md); } }
-function selectTab(t){
+// r36: 本体のボタンで画面が変わったら、アプリの画面も合わせる。
+// アプリから切り替えた直後は、本体がまだ前の画面を知らせてくるので、切り替わるまで（最長 4 秒）は合わせない
+const TAB_OF={V:'volt',P:'plot',S:'scope',R:'rs485',C:'cont',E:'env',I:'info'}, MODE_OF={volt:'V',plot:'P',scope:'S',rs485:'R',cont:'C',env:'E',info:'I'};
+let modeWant=null, modeWantAt=0;
+function followDev(){
+  if(!connected) return;
+  if(modeWant){ if(devMode===modeWant||Date.now()-modeWantAt>4000) modeWant=null; else return; }
+  const t=TAB_OF[devMode]; if(!t||t===tab) return;
+  if(tab==='env'&&fwNum<1.15&&devMode==='V') return;       // 古い本体には温湿度の画面がなく、電圧の画面で代用している
+  selectTab(t,true);
+}
+function selectTab(t,fromDev){
   if(document.body.classList.contains('scope-focus')) setFocus(false);
+  if(!fromDev){ modeWant=(t==='env'&&fwNum<1.15)?'V':MODE_OF[t]; modeWantAt=Date.now(); }
   tab=t; $('ttl').textContent=TAB_NAME[t]; sheet(null);
   document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('sel',b.dataset.tab===t));
   document.querySelectorAll('section').forEach(s=>s.classList.toggle('sel',s.id===t));
@@ -1609,22 +1657,13 @@ $('vdDn').onclick=()=>vdStep(-1); $('vdUp').onclick=()=>vdStep(1); $('vdBox').on
 const CUR_NAME=[ic('curX')+'カーソル',ic('curX')+'時間',ic('curY')+'電圧',ic('curXY')+'時間+電圧'];
 $('btnCur').onclick=()=>{ curMode=(curMode+1)%4; $('btnCur').classList.toggle('on',curMode>0); $('btnCur').innerHTML=CUR_NAME[curMode]; saveUiPrefs(); drawScope(); requestAnimationFrame(drawScope); };
 document.querySelectorAll('#segMath button').forEach(b=>b.onclick=()=>{ mathMode=b.dataset.v; setSeg('segMath',mathMode); saveUiPrefs(); drawScope(); });
-function setScopeView(v){
-  $('scope').classList.toggle('view-fft',v==='fft');
-  $('scWaveTab').classList.toggle('selected',v!=='fft');
-  $('scFftTab').classList.toggle('selected',v==='fft');
-  requestAnimationFrame(drawScope);
-}
+// r37: FFT は波形と同時に表示する（縦画面は上下、横画面は左右）
 function fftShow(){
   $('fftWrap').style.display=fftOn?'':'none';
   $('scope').classList.toggle('fft',fftOn);
-  $('scViews').style.display=fftOn?'flex':'none';
   $('btnFft').classList.toggle('on',fftOn);
-  if(fftOn) setScopeView('fft'); else setScopeView('wave');
   requestAnimationFrame(drawScope);
 }
-$('scWaveTab').onclick=()=>setScopeView('wave');
-$('scFftTab').onclick=()=>setScopeView('fft');
 $('btnFft').onclick=()=>{ fftOn=!fftOn; fftShow(); };
 $('btnFftWin').onclick=()=>{ fftHann=!fftHann; $('btnFftWin').textContent=fftHann?'窓: ハン':'窓: なし'; $('btnFftWin').classList.toggle('on',fftHann); saveUiPrefs(); drawScope(); };
 // FFT のタッチ操作（波形と同じ考え方）
@@ -1693,8 +1732,11 @@ function setFocus(on){
 $('scFocus').onclick=()=>setFocus(!document.body.classList.contains('scope-focus'));
 $('btnScPng').onclick=()=>{
   if(!sc){msg('保存できる波形がありません。');return;}
-  const showingFft=fftOn&&$('scope').classList.contains('view-fft')&&getComputedStyle($('scopeWaveWrap')).display==='none';
-  const src=showingFft?$('cvFft'):$('cvScope'),dpr=window.devicePixelRatio||1;
+  const dpr=window.devicePixelRatio||1, wv=$('cvScope'), ff=$('cvFft'), both=fftOn&&ff.width>0&&ff.height>0;
+  const src=document.createElement('canvas'), gap=both?12*dpr:0;
+  src.width=Math.max(wv.width,both?ff.width:0); src.height=wv.height+(both?gap+ff.height:0);
+  { const sx=src.getContext('2d'); sx.fillStyle='#0b0e15'; sx.fillRect(0,0,src.width,src.height); sx.drawImage(wv,0,0); if(both) sx.drawImage(ff,0,wv.height+gap); }
+  const showingFft=false;
   const out=document.createElement('canvas'), margin=24*dpr, head=64*dpr, foot=52*dpr;
   out.width=Math.round(src.width+2*margin);out.height=Math.round(src.height+head+foot+2*margin);
   const c=out.getContext('2d');c.fillStyle='#0b0e15';c.fillRect(0,0,out.width,out.height);
