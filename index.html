@@ -336,7 +336,7 @@ body.scope-focus #top,body.scope-focus #rail{display:none!important}
 body.scope-focus #stage{padding:0!important}
 body.scope-focus #scope.sel{gap:0}
 body.scope-focus #scope .scopeControls,body.scope-focus #scope .scopeStatus,body.scope-focus #scope .measTitle,
-body.scope-focus #scope #scMeas,body.scope-focus #scope #scCur,body.scope-focus #scope #scViews{display:none!important}
+body.scope-focus #scope #scMeas,body.scope-focus #scope #scCur,body.scope-focus #scope #scDec,body.scope-focus #scope #scViews{display:none!important}
 body.scope-focus #scPlotArea{min-height:0}
 body.scope-focus #scopeWaveWrap,body.scope-focus #fftWrap{border-radius:0}
 body.scope-focus #scFocusExit{display:flex;position:absolute;right:15px;top:12px;z-index:25;min-height:34px;padding:5px 11px;background:rgba(16,26,41,.86);border:1px solid #3a5873;border-radius:8px;font-size:12px;align-items:center;gap:5px}
@@ -521,6 +521,26 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
   #rail .rg button i svg{width:17px;height:17px}
   #scFocus{width:30px;height:30px;left:6px;bottom:6px}
 }
+
+/* r38: UART 解読 */
+#scDec{flex:0 0 auto;display:none;background:#fff;border:1px solid #e4e8f1;border-radius:10px;padding:5px 9px;font-size:12px;color:#3e4a64;max-height:96px;overflow-y:auto}
+#scDec .dh{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+#scDec .dh b{color:#138f77;font-size:12px}
+#scDec .dh span{color:#7b859b;font-size:11px;font-variant-numeric:tabular-nums}
+#scDec .dh em{font-style:normal;font-size:10px;font-weight:700;color:#a46a10;background:#fff3da;border-radius:5px;padding:0 5px}
+#scDec .dw{color:#a46a10;font-size:11px;margin-top:2px}
+#scDec .dn{color:#9ba3b3;font-size:11px;margin-top:2px}
+#scDec .dl{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+#scDec .dc{display:inline-flex;flex-direction:column;align-items:center;min-width:26px;padding:1px 4px;border-radius:6px;background:#e5f8f1;font-family:ui-monospace,Menlo,monospace;line-height:1.15}
+#scDec .dc b{font-size:13px;color:#10866b}
+#scDec .dc small{font-size:9px;color:#6b8f84}
+#scDec .dc.ng{background:#fff0f2}
+#scDec .dc.ng b{color:#d7435a}
+#scDec .dc.ng small{color:#c48a95}
+@media (orientation:landscape) and (max-height:500px){
+  #scDec{padding:2px 8px;max-height:52px}
+  #scDec .dl{margin-top:2px}
+}
 </style>
 </head>
 <body>
@@ -577,6 +597,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
     <div class="cw" id="fftWrap" style="display:none"><canvas id="cvFft" style="touch-action:none"></canvas></div>
   </div>
   <div id="scCur"></div>
+  <div id="scDec"></div>
   <div class="measTitle"><span><span class="measDot"></span> 自動測定</span></div>
   <div id="scMeas" aria-label="測定値"></div>
   <div id="scInfo" class="scopeSourceDetails"><span id="scInfoA">--</span><span id="scInfoT"></span></div>
@@ -664,6 +685,14 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
   <div class="lbl">演算</div>
   <div class="g"><div class="seg" id="segMath" style="flex-wrap:wrap"><button data-v="off" class="on">なし</button><button data-v="inv">反転</button><button data-v="ac">直流除去</button><button data-v="lp">平滑</button><button data-v="diff">微分</button><button data-v="int">積分</button></div></div>
   <div class="g g2"><button id="btnFft">FFT</button><button id="btnFftWin" class="on">窓: ハン</button></div>
+  <div class="lbl">UART 解読</div>
+  <div class="g g2"><button id="btnDec">解読</button><button id="btnDecFmt">表示: HEX</button></div>
+  <div class="g"><div class="seg" id="segDecBd" style="flex-wrap:wrap"><button data-v="9600">9600</button><button data-v="19200">19200</button><button data-v="38400" class="on">38400</button><button data-v="57600">57600</button><button data-v="115200">115200</button><button data-v="307200">307200</button><button data-v="x">任意</button></div></div>
+  <div class="g" id="decBdRow" style="display:none"><input id="decBdIn" type="number" min="50" max="2000000" placeholder="速度 bps"></div>
+  <div class="g"><div class="seg" id="segDecPol"><button data-v="-1" class="on">mark が −</button><button data-v="1">mark が ＋</button></div></div>
+  <div class="g"><div class="seg" id="segDecTh"><button data-v="a" class="on">しきい値 自動</button><button data-v="m">手入力</button></div></div>
+  <div class="g" id="decThRow" style="display:none"><input id="decThIn" type="number" step="0.1" placeholder="しきい値 V"></div>
+  <div class="g"><div class="seg" id="segDecPa"><button data-v="N" class="on">パリティなし</button><button data-v="E">偶数</button><button data-v="O">奇数</button></div></div>
 </div>
 <div class="sheet" id="shMore"><button class="x"><i data-ic="close"></i></button>
   <div class="g"><button id="btnMeas" class="on">測定値を表示</button></div>
@@ -807,7 +836,7 @@ function setConn(){
   $('btnConn').className=connected?'':'pri'; $('btnDemo').style.display=connected&&!demo?'none':''; $('btnDemo').classList.toggle('on',!!demo); $('btnDemo').textContent=demo?'デモ終了':'デモ'; $('demoChip').style.display=demo?'':'none'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
 // アプリの版。情報の画面に出す（GitHub に上げた版が新しいかどうかを見分けるため）
-const APP_VER='2026-11-25 r37';
+const APP_VER='2026-11-26 r38';
 let fwNum=0, sentLog=[], lastErr='', nSb=0, keyInit=false;
 // 本体のボタン操作など 1 文字の命令。ファーム 1.14 以上は !KEY= の行で送る（1 文字のままだと、行の一部が欠けたときに誤動作するため）
 function sendKey(k){ return send(fwNum>=1.14?'!KEY='+k+'\n':k); }
@@ -872,7 +901,9 @@ const DEMO_SIG=[
   {n:'ラント入りパルス',lo:0,hi:3.3,f:t=>{const k=Math.floor(t*500), p=(t*500)%1; return p<0.3?(k%5===4?1.6:3.3):0;}},
   {n:'時々止まる 1kHz クロック',lo:0,hi:3.3,f:t=>{const p=(t*50)%1; return p>0.7?3.3:((t*1000)%1<0.5?3.3:0);}},
   {n:'立上りが遅いパルス混在',lo:0,hi:3.3,f:t=>{const k=Math.floor(t*250), p=((t*250)%1)*4000, tr=k%2?800:50; return p<tr?3.3*p/tr:p<2000?3.3:0;}},
-  {n:'1kHz 正弦波 + 3kHz のひずみ',lo:0.5,hi:4.5,f:t=>2.5+1.5*Math.sin(2*Math.PI*1000*t)+0.3*Math.sin(2*Math.PI*3000*t)}
+  {n:'1kHz 正弦波 + 3kHz のひずみ',lo:0.5,hi:4.5,f:t=>2.5+1.5*Math.sin(2*Math.PI*1000*t)+0.3*Math.sin(2*Math.PI*3000*t)},
+  // r38: RS-485 を J2 で見たときの形（送っていないときは 0V、mark＝−3.2V、space＝＋3.2V）
+  {n:'RS-485 19200bps Hello',lo:-3.2,hi:3.2,f:t=>{ const T=1/19200, msg=[0x48,0x65,0x6C,0x6C,0x6F], b=((t%0.005)-0.0005)/T; if(b<-1||b>=msg.length*10+1) return 0; if(b<0) return -3.2; const k=Math.floor(b), ch=Math.floor(k/10), j=k%10; if(ch>=msg.length) return -3.2; const bit=j===0?0:j===9?1:(msg[ch]>>(j-1))&1; return bit?-3.2:3.2; }}
 ];
 const DEMO_US=US_NEW;
 function demoRange(v){ v=Math.abs(v); return v<3.2?3:v<4.3?2:v<9.6?1:0; }
@@ -1246,6 +1277,110 @@ function drawFft(v,us){
   c.fillStyle='#ffd24a'; c.font='11px -apple-system,sans-serif'; c.fillText('最大 '+fmtHz(pf)+'  '+db[pk].toFixed(1)+'dBV',L+62,3);
   c.fillStyle='#8a97b4'; c.textAlign='right'; c.fillText((span/8).toFixed(span<40?1:0)+'dB/目盛　1 本あたり '+fmtHz(fs/n),W-6,17);
 }
+// ---------- r38: UART 解読 ----------
+const DEC_KEY='xm_dec';
+let ud={on:false,bd:38400,bdx:0,pol:-1,tha:true,th:0,pa:'N',fmt:'hex'}, decCache={sc:null,key:'',r:null};
+try{ const o=JSON.parse(localStorage.getItem(DEC_KEY)||'{}'); Object.keys(ud).forEach(k=>{ if(o[k]!==undefined&&typeof o[k]===typeof ud[k]) ud[k]=o[k]; }); }catch(e){}
+function decSave(){ try{ localStorage.setItem(DEC_KEY,JSON.stringify(ud)); }catch(e){} }
+function decBaud(){ return ud.bdx>0?ud.bdx:ud.bd; }
+// v: 電圧の配列、us: 1 点の時間、pol=-1 は「mark（論理 1）がマイナス」
+function uartDecode(v,us,baud,pol,th,pa){
+  const n=v.length, bit=1e6/baud/us, db=8, pb=pa==='N'?0:1, nb=db+pb;
+  let mn=Infinity,mx=-Infinity; for(const x of v){ if(x<mn) mn=x; if(x>mx) mx=x; }
+  if(th===null) th=mx-mn>0.5?(mx+mn)/2:0;
+  const res={bit:bit,th:th,chars:[]};
+  if(!(bit>=1)||n<4) return res;
+  const hy=Math.max(0.2,(mx-mn)*0.1), lv=new Array(n);
+  // mark=1 / space=0 / どちらでもない（変換器が線を離している）=null
+  for(let k=0;k<n;k++){ const d=(v[k]-th)*pol; lv[k]=d>hy?1:d<-hy?0:null; }
+  // 文字が切れ目なく続くと、どの 0 がスタートビットか決まらない。1 文字分以上 space が無い所（休み）の後は確実に読む
+  const need=Math.floor(bit*(nb+2)); let run=0,start=-1;
+  for(let k=0;k<n;k++){ run=lv[k]!==0?run+1:0; if(run>=need){ start=k; break; } }
+  const at=x=>Math.round(x);
+  function scan(i,stopAt,synced){
+    const out=[];
+    while(i<stopAt){
+      if(lv[i]===0&&lv[i-1]!==0){
+        const c=i+bit*0.5;
+        if(c>=n||lv[Math.floor(c)]!==0){ i++; continue; }
+        let val=0,ok=true,end=false;
+        for(let k=0;k<db;k++){ const p=at(c+bit*(k+1)); if(p>=n){ end=true; break; } if(lv[p]===null){ ok=false; break; } val|=lv[p]<<k; }
+        const pp=at(c+bit*(db+1)), ps=at(c+bit*(nb+1));
+        if(end||ps>=n) break;                       // 取り込みの最後で切れた文字は捨てる
+        if(!ok){ i++; continue; }                   // 途中で線が離された所は文字とみなさない
+        const se=lv[ps]!==1; let pe=false;
+        if(pb){ const b=lv[pp]; if(b===null) pe=true; else { let ones=b; for(let k=0;k<db;k++) ones+=(val>>k)&1; pe=pa==='E'?(ones&1)!==0:(ones&1)!==1; } }
+        if((se||pe)&&!out.length&&!synced){ i++; continue; }   // 休みの前: 合うまで 1 点ずつずらして探す
+        out.push({i:i,t:i*us,b:val,se:se,pe:pe});
+        i=Math.max(i+1,Math.floor(c+bit*(nb+0.5)));            // ストップビットの中ほどから次を探す
+      } else i++;
+    }
+    return out;
+  }
+  // 休みより前は区切りが決まらない。候補の始まりごとに続けて読み、ストップビット・パリティの誤りが最も少なく、
+  // 文字数が最も多い並びを選ぶ（参考実装の「最初に合った所から読む」より、取り込みが文字の途中から始まったときに強い）
+  function hunt(stopAt){
+    let best=[],bs=-1e9;
+    for(let i=1;i<stopAt;i++){
+      if(!(lv[i]===0&&lv[i-1]!==0)) continue;
+      const o=scan(i,stopAt,true); if(!o.length||o[0].i!==i) continue;
+      const e=o.reduce((a,x)=>a+(x.se||x.pe?1:0),0);
+      // 正しい区切りなら、最後の文字のあとから休みまでに space は残らない（ずれた区切りは読み残しが出る）
+      const last=o[o.length-1], from=Math.ceil(last.i+bit*(nb+2)), to=stopAt>=n?n-Math.ceil(bit*(nb+2)):stopAt;
+      let left=0; for(let k=from;k<to;k++) if(lv[k]===0) left++;
+      const sc2=o.length-4*e-(left>bit*0.5?3:0);
+      if(sc2>bs){ bs=sc2; best=o; }
+    }
+    return best;
+  }
+  res.chars=start<0?hunt(n):hunt(start-need+1).concat(scan(start,n,true));
+  return res;
+}
+function decRun(){
+  if(!ud.on||!sc) return null;
+  const key=[decBaud(),ud.pol,ud.tha?'a':ud.th,ud.pa].join(',');
+  if(decCache.sc===sc&&decCache.key===key) return decCache.r;
+  const r=uartDecode(sc.v,sc.us,decBaud(),ud.pol,ud.tha?null:ud.th,ud.pa);
+  decCache={sc:sc,key:key,r:r}; return r;
+}
+const hex2=b=>b.toString(16).toUpperCase().padStart(2,'0');
+function decAsc(b){ return b===0x0D?'\\r':b===0x0A?'\\n':b===0x09?'\\t':b>=0x20&&b<0x7F?String.fromCharCode(b):'·'; }
+function decLabel(ch){ return ud.fmt==='asc'?decAsc(ch.b):hex2(ch.b); }
+function decShowList(r){
+  const box=$('scDec');
+  if(!ud.on||!sc){ box.style.display='none'; return; }
+  box.style.display='block';
+  const bd=decBaud(), weak=r&&r.bit<4;
+  let h='<div class="dh"><b>UART '+bd+'bps</b><span>'+(r?'1 ビット '+r.bit.toFixed(1)+' 点 · しきい値 '+fmtV(r.th,1)+'V · '+r.chars.length+' 文字':'')+'</span>'+(weak?'<em>参考</em>':'')+'</div>';
+  if(r&&r.bit<1) h+='<div class="dw">時間軸を速くしてください（いまは 1 ビット '+r.bit.toFixed(1)+' 点）</div>';
+  else if(weak) h+='<div class="dw">時間軸を速くしてください（いまは 1 ビット '+r.bit.toFixed(1)+' 点）</div>';
+  if(r&&r.chars.length){
+    h+='<div class="dl">'+r.chars.map(ch=>{ const e=ch.se||ch.pe; return '<span class="dc'+(e?' ng':'')+'"><b>'+esc(ud.fmt==='asc'?decAsc(ch.b):hex2(ch.b))+(e?'!':'')+'</b><small>'+esc(ud.fmt==='asc'?hex2(ch.b):decAsc(ch.b))+'</small></span>'; }).join('')+'</div>';
+  } else if(r&&r.bit>=1) h+='<div class="dn">文字が見つかりません</div>';
+  if(box.innerHTML!==h) box.innerHTML=h;
+}
+function decDraw(c,W,H,XI){
+  const r=decRun(); decShowList(r);
+  if(!r||!r.chars.length) return;
+  const nb=8+(ud.pa==='N'?0:1), y0=28, hh=17;
+  c.save(); c.font='bold 11px ui-monospace,Menlo,monospace'; c.textAlign='center'; c.textBaseline='middle'; c.lineWidth=1;
+  r.chars.forEach(ch=>{
+    const x0=XI(ch.i), x1=XI(ch.i+r.bit*(nb+2)); if(x1<0||x0>W) return;
+    const e=ch.se||ch.pe, col=e?'#ff6b6b':'#3ddc97';
+    c.fillStyle=e?'rgba(255,107,107,.20)':'rgba(61,220,151,.16)'; c.fillRect(x0,y0,x1-x0,hh);
+    c.strokeStyle=col; c.strokeRect(Math.round(x0)+0.5,y0+0.5,Math.max(1,Math.round(x1-x0)-1),hh-1);
+    c.globalAlpha=0.35; c.beginPath(); c.moveTo(x0,y0+hh); c.lineTo(x0,H); c.stroke(); c.globalAlpha=1;
+    const t=decLabel(ch)+(e?'!':''); if(c.measureText(t).width+4<=x1-x0){ c.fillStyle=e?'#ffb3b3':'#c9f5e2'; c.fillText(t,(x0+x1)/2,y0+hh/2+0.5); }
+  });
+  c.restore();
+}
+function decUi(){
+  $('btnDec').classList.toggle('on',ud.on); $('btnDec').textContent=ud.on?'解読: 入':'解読: 切';
+  $('btnDecFmt').textContent=ud.fmt==='asc'?'表示: ASCII':'表示: HEX';
+  setSeg('segDecBd',ud.bdx>0?'x':ud.bd); $('decBdRow').style.display=ud.bdx>0?'':'none'; if(ud.bdx>0&&document.activeElement!==$('decBdIn')) $('decBdIn').value=ud.bdx;
+  setSeg('segDecPol',ud.pol); setSeg('segDecTh',ud.tha?'a':'m'); $('decThRow').style.display=ud.tha?'none':''; if(!ud.tha&&document.activeElement!==$('decThIn')) $('decThIn').value=ud.th;
+  setSeg('segDecPa',ud.pa);
+}
 function scRange(){ let mn=Infinity,mx=-Infinity; sc.v.forEach(x=>{mn=Math.min(mn,x);mx=Math.max(mx,x);}); return [mn,mx]; }
 function showRun(){
   const b=$('btnRun'); b.className=scState==='stop'?'stop':'run';
@@ -1341,6 +1476,8 @@ function drawScope(){
     }
     c.restore();
   }
+  // r38: UART 解読の枠と値
+  if(ud.on&&sc) decDraw(c,W,H,XI); else decShowList(null);
   // カーソル
   if(curMode&&sc){
     let h='';
@@ -1665,6 +1802,16 @@ function fftShow(){
   requestAnimationFrame(drawScope);
 }
 $('btnFft').onclick=()=>{ fftOn=!fftOn; fftShow(); };
+$('btnDec').onclick=()=>{ ud.on=!ud.on; decSave(); decUi(); drawScope(); };
+$('btnDecFmt').onclick=()=>{ ud.fmt=ud.fmt==='asc'?'hex':'asc'; decSave(); decUi(); drawScope(); };
+document.querySelectorAll('#segDecBd button').forEach(b=>b.onclick=()=>{ if(b.dataset.v==='x'){ ud.bdx=ud.bdx>0?ud.bdx:ud.bd; } else { ud.bd=+b.dataset.v; ud.bdx=0; } ud.on=true; decSave(); decUi(); drawScope(); });
+$('decBdIn').onchange=()=>{ const x=Math.round(+$('decBdIn').value); if(x>=50&&x<=2000000){ ud.bdx=x; decSave(); } decUi(); drawScope(); };
+document.querySelectorAll('#segDecPol button').forEach(b=>b.onclick=()=>{ ud.pol=+b.dataset.v; decSave(); decUi(); drawScope(); });
+document.querySelectorAll('#segDecTh button').forEach(b=>b.onclick=()=>{ ud.tha=b.dataset.v==='a'; decSave(); decUi(); drawScope(); });
+$('decThIn').onchange=()=>{ const x=+$('decThIn').value; if(isFinite(x)&&Math.abs(x)<=60){ ud.th=x; decSave(); } decUi(); drawScope(); };
+document.querySelectorAll('#segDecPa button').forEach(b=>b.onclick=()=>{ ud.pa=b.dataset.v; decSave(); decUi(); drawScope(); });
+$('scDec').onclick=()=>{ const r=decRun(); if(!r||!r.chars.length) return; const t=r.chars.map(ch=>hex2(ch.b)).join(' '); try{ navigator.clipboard.writeText(t).then(()=>msg('コピーしました: '+t.slice(0,60)),()=>{}); }catch(e){} };
+decUi();
 $('btnFftWin').onclick=()=>{ fftHann=!fftHann; $('btnFftWin').textContent=fftHann?'窓: ハン':'窓: なし'; $('btnFftWin').classList.toggle('on',fftHann); saveUiPrefs(); drawScope(); };
 // FFT のタッチ操作（波形と同じ考え方）
 // 1 本指: つかんで動かす（左右＝周波数の範囲、上下＝レベルの範囲）。動かさずに離すと、その周波数に読み取り線を置く。
