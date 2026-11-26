@@ -665,6 +665,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
   </div>
   <div class="lbl" style="margin-top:6px">記録の長さ</div>
   <div class="g"><div class="seg" id="segRl"><button data-v="128">128</button><button data-v="256">256</button><button data-v="512">512</button><button data-v="1024">1024</button></div></div>
+  <div class="g"><div class="seg" id="segRm"><button data-v="w">前後も記録</button><button data-v="f">画面に詰める</button></div></div>
 </div>
 <div class="sheet" id="shTrig"><button class="x"><i data-ic="close"></i></button>
   <div class="g"><div class="seg wrap" id="segTt"><button data-v="E">エッジ</button><button data-v="P">パルス幅</button><button data-v="T">タイムアウト</button><button data-v="R">ラント</button><button data-v="W">ウィンドウ</button><button data-v="S">スロープ</button><button data-v="I">休み後</button><button data-v="X">RS-485</button></div></div>
@@ -764,7 +765,9 @@ let nBad=0,wq=Promise.resolve(),devMode='V',tab='scope',nLines=0,nErr=0;
 let hold=false,st={min:Infinity,max:-Infinity,sum:0,n:0};
 let plot=[],plotRun=true,plotWin=120;
 let sc=null,scState='run',scWait=false,scTimer=null,scWatch=null,scLastId=-1,scWaiting=false,cfg={tm:'A',te:'R',tla:1,tl:0,tb:0,tp:64,tt:'E',pc:'G',pw:1000,tl2a:1,tl2:0,th:0,rl:128},fwOk=true,fwRl=false,fwNew=false,lv2Drag=null,streaming=false,lastScAt=0,fps=0,preDrag=null,tpSent=0;
-let hPan=0;   // r40: 拡大したときの表示の左右のずらし（µs、トリガ点が基準）
+let hPan=0, recMode='w';   // recMode: w=画面は約 128 点で、残りの記録を前後に使う / f=記録を全部画面に詰める
+try{ if(localStorage.getItem('xm_rm')==='f') recMode='f'; }catch(e){}
+   // r40: 拡大したときの表示の左右のずらし（µs、トリガ点が基準）
 let vAuto=true,vDiv=0.5,vCen=0,hZoom=1,tbSwitchAt=0,D=null,animReq=false,gesture=false;
 // 本体の時間軸（µs/点）。ファーム 1.10 以上は SPI 取り込みで 9 段、それより前は 3 段
 const B64T={}; 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.split('').forEach((ch,i)=>B64T[ch.charCodeAt(0)]=i);
@@ -838,7 +841,7 @@ function setConn(){
   $('btnConn').className=connected?'':'pri'; $('btnDemo').style.display=connected&&!demo?'none':''; $('btnDemo').classList.toggle('on',!!demo); $('btnDemo').textContent=demo?'デモ終了':'デモ'; $('demoChip').style.display=demo?'':'none'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
 // アプリの版。情報の画面に出す（GitHub に上げた版が新しいかどうかを見分けるため）
-const APP_VER='2026-11-26 r40';
+const APP_VER='2026-11-26 r41';
 let fwNum=0, sentLog=[], lastErr='', nSb=0, keyInit=false;
 // 本体のボタン操作など 1 文字の命令。ファーム 1.14 以上は !KEY= の行で送る（1 文字のままだと、行の一部が欠けたときに誤動作するため）
 function sendKey(k){ return send(fwNum>=1.14?'!KEY='+k+'\n':k); }
@@ -1401,10 +1404,10 @@ function normZoom(){
   const tb=cfg.tb|0, now=Date.now(), rl=cfg.rl||128, stop=scState==='stop';
   if(!stop&&now-tbSwitchAt>350){
     if(hZoom<1&&tb<US_NOM.length-1){ hZoom*=US_NOM[tb+1]/US_NOM[tb]; cfg.tb=tb+1; tbSwitchAt=now; send('!TB='+tbFw(cfg.tb)+'\n'); }
-    else if(tb>0&&(rl-1)/hZoom<100&&hZoom>=US_NOM[tb]/US_NOM[tb-1]){ hZoom/=US_NOM[tb]/US_NOM[tb-1]; cfg.tb=tb-1; tbSwitchAt=now; send('!TB='+tbFw(cfg.tb)+'\n'); }
+    else if(tb>0&&(recMode==='f'||(rl-1)/hZoom<100)&&hZoom>=US_NOM[tb]/US_NOM[tb-1]){ hZoom/=US_NOM[tb]/US_NOM[tb-1]; cfg.tb=tb-1; tbSwitchAt=now; send('!TB='+tbFw(cfg.tb)+'\n'); }
   }
   const t2=cfg.tb|0, r=t2>0?US_NOM[t2]/US_NOM[t2-1]:1;
-  const zmax=(stop||t2===0)?Math.max(1,(rl-1)/8):Math.max(r,(rl-1)/100)*1.3, zmin=(stop||t2===US_NOM.length-1)?1:0.7;
+  const zmax=(stop||t2===0)?Math.max(1,(rl-1)/8):(recMode==='f'?r:Math.max(r,(rl-1)/100))*1.3, zmin=(stop||t2===US_NOM.length-1)?1:0.7;
   hZoom=Math.min(zmax,Math.max(zmin,hZoom));
 }
 // r23: 「時間 / 目盛」を 1・2・5 の切りのよい値にそろえる（以前は 103µs のような半端な値になった）
@@ -1414,8 +1417,13 @@ function divOk(){ const [lo,hi]=divRange(); return divList().filter(d=>d>=lo*0.9
 function setDiv(d,keep){
   const st=d*10, rl=(cfg.rl||128), cur=cfg.tb|0, stop=scState==='stop'; let tb=US_NOM.length-1;
   if(stop) tb=cur;                                                                  // 止めているときは拡大だけ
-  else if(keep&&US_NOM[cur]*(rl-1)>=st*0.999&&st/US_NOM[cur]>=100) tb=cur;          // ピンチの拡大: 記録を画面より長く保つ
-  else for(let i=0;i<US_NOM.length;i++){ if(US_NOM[i]*(rl-1)>=st*0.999){ tb=i; break; } }   // 画面を埋められる中で、いちばん細かい取り込み間隔
+  else {
+    let best=-1;
+    // r41: 前後も記録: 画面に 100 点以上入る中で、いちばん粗い間隔（記録がいちばん長くなり、止めてから縮小・左右にずらして前後を見られる）
+    if(recMode==='w') for(let i=0;i<US_NOM.length;i++){ if(US_NOM[i]*(rl-1)>=st*0.999&&st/US_NOM[i]>=100) best=i; }
+    if(best<0) for(let i=0;i<US_NOM.length;i++){ if(US_NOM[i]*(rl-1)>=st*0.999){ best=i; break; } }   // 画面を埋められる中で、いちばん細かい取り込み間隔
+    tb=best<0?US_NOM.length-1:best;
+  }
   hZoom=Math.max(stop?1:1e-6,US_NOM[tb]*(rl-1)/st);
   if(tb!==cur){ cfg.tb=tb; tbSwitchAt=Date.now(); hPan=0; if(connected) send('!TB='+tbFw(tb)+'\n'); }
 }
@@ -1886,6 +1894,8 @@ $('btnFftWin').onclick=()=>{ fftHann=!fftHann; $('btnFftWin').textContent=fftHan
   cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',e=>{ pts.delete(e.pointerId); pinch=null; drag=null; });
 })();
 // トリガの種類と条件（判定は本体ファーム v1.00 以上が行う）
+document.querySelectorAll('#segRm button').forEach(b=>b.onclick=()=>{ recMode=b.dataset.v; try{ localStorage.setItem('xm_rm',recMode); }catch(e){} setSeg('segRm',recMode); if(scState!=='stop'){ hPan=0; snapDiv(); } drawScope(); });
+setSeg('segRm',recMode);
 document.querySelectorAll('#segRl button').forEach(b=>b.onclick=()=>{ if(!connected) return; if(!fwRl){ msg('記録の長さの変更は、本体のファーム 1.13 以上が必要です。'); return; } hZoom=1; hPan=0; trigSet('RL','rl',+b.dataset.v); cfg.rl=+b.dataset.v; snapDiv(); drawScope(); });
 function needNew(){ if(fwNew) return true; msg('このトリガは本体のファーム 1.00 以上が必要です。'); return false; }
 async function trigSet(cmd,key,val){ if(!connected) return; cfg[key]=val; showCfg(); drawScope(); await send('!'+cmd+'='+val+'\n'); if(scState!=='stop'){ scWait=false; scRequest(); } }
