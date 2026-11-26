@@ -667,7 +667,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
   <div class="g"><div class="seg" id="segRl"><button data-v="128">128</button><button data-v="256">256</button><button data-v="512">512</button><button data-v="1024">1024</button></div></div>
 </div>
 <div class="sheet" id="shTrig"><button class="x"><i data-ic="close"></i></button>
-  <div class="g"><div class="seg wrap" id="segTt"><button data-v="E">エッジ</button><button data-v="P">パルス幅</button><button data-v="T">タイムアウト</button><button data-v="R">ラント</button><button data-v="W">ウィンドウ</button><button data-v="S">スロープ</button><button data-v="X">RS-485</button></div></div>
+  <div class="g"><div class="seg wrap" id="segTt"><button data-v="E">エッジ</button><button data-v="P">パルス幅</button><button data-v="T">タイムアウト</button><button data-v="R">ラント</button><button data-v="W">ウィンドウ</button><button data-v="S">スロープ</button><button data-v="I">休み後</button><button data-v="X">RS-485</button></div></div>
   <div class="two">
     <div class="g"><div class="seg" id="segTe"><button data-v="R"><i data-ic="edgeR"></i>立上り</button><button data-v="F"><i data-ic="edgeF"></i>立下り</button><button data-v="B"><i data-ic="edgeB"></i>両方</button></div></div>
     <div class="g"><div class="seg" id="segTm"><button data-v="A">オート</button><button data-v="N">ノーマル</button></div></div>
@@ -687,6 +687,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
   <div class="g g2"><button id="btnFft">FFT</button><button id="btnFftWin" class="on">窓: ハン</button></div>
   <div class="lbl">UART 解読</div>
   <div class="g g2"><button id="btnDec">解読</button><button id="btnDecFmt">表示: HEX</button></div>
+  <div class="g"><button id="btnDecTrig">トリガを文字列の先頭に合わせる</button></div>
   <div class="g"><div class="seg" id="segDecBd" style="flex-wrap:wrap"><button data-v="9600">9600</button><button data-v="19200">19200</button><button data-v="38400" class="on">38400</button><button data-v="57600">57600</button><button data-v="115200">115200</button><button data-v="307200">307200</button><button data-v="x">任意</button></div></div>
   <div class="g" id="decBdRow" style="display:none"><input id="decBdIn" type="number" min="50" max="2000000" placeholder="速度 bps"></div>
   <div class="g"><div class="seg" id="segDecPol"><button data-v="-1" class="on">mark が −</button><button data-v="1">mark が ＋</button></div></div>
@@ -763,6 +764,7 @@ let nBad=0,wq=Promise.resolve(),devMode='V',tab='scope',nLines=0,nErr=0;
 let hold=false,st={min:Infinity,max:-Infinity,sum:0,n:0};
 let plot=[],plotRun=true,plotWin=120;
 let sc=null,scState='run',scWait=false,scTimer=null,scWatch=null,scLastId=-1,scWaiting=false,cfg={tm:'A',te:'R',tla:1,tl:0,tb:0,tp:64,tt:'E',pc:'G',pw:1000,tl2a:1,tl2:0,th:0,rl:128},fwOk=true,fwRl=false,fwNew=false,lv2Drag=null,streaming=false,lastScAt=0,fps=0,preDrag=null,tpSent=0;
+let hPan=0;   // r40: 拡大したときの表示の左右のずらし（µs、トリガ点が基準）
 let vAuto=true,vDiv=0.5,vCen=0,hZoom=1,tbSwitchAt=0,D=null,animReq=false,gesture=false;
 // 本体の時間軸（µs/点）。ファーム 1.10 以上は SPI 取り込みで 9 段、それより前は 3 段
 const B64T={}; 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'.split('').forEach((ch,i)=>B64T[ch.charCodeAt(0)]=i);
@@ -777,7 +779,7 @@ function tbLogical(f){ if(!TBMAP) return f; const k=TBMAP.indexOf(f); return k<0
 function setTbTable(nt,map){ if(nt===US_NOM) return false; US_NOM=nt; TBMAP=map; return true; }
 let curMode=0,curC=0.3,curD=0.7,mathMode='off',fftOn=false,fftHann=true,fftMark=null,measPage=0,measVals=[];
 const PWS=[20,50,100,200,500,1000,2000,5000,10000,20000,50000,100000,200000], THS=[0,1,2,5,10,20,50,100,200,500,1000];
-const TT_NAME={E:'エッジ',P:'パルス幅',T:'タイムアウト',R:'ラント',W:'ウィンドウ',S:'スロープ',X:'RS-485'};
+const TT_NAME={E:'エッジ',P:'パルス幅',T:'タイムアウト',R:'ラント',W:'ウィンドウ',S:'スロープ',X:'RS-485',I:'休み後'};
 // アイコン（すべて自作の線画。絵文字や記号文字は使わない）
 const IC_P={menu:'M4 6h16M4 12h16M4 18h16',single:'M3 12h11M10 7l5 5-5 5M19 5v14',auto:'M5 19L12 5l7 14M8 14h8',axis:'M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3',trig:'M3 18h7V6h11M7 13l3-3 3 3',curX:'M8 3v18M16 3v18',curY:'M3 8h18M3 16h18',curXY:'M8 3v18M16 3v18M3 8h18M3 16h18',math:'M2 14c1.5-7 3-7 4.5 0s3 7 4.5 0M15 8h6M18 5v6M15 17h6',hold:'M8 5v14M16 5v14',reset:'M4 12a8 8 0 1 0 2.6-5.9M4 4v5h5',warn:'M12 3l10 18H2zM12 10v5M12 18v.4',volt:'M4 17a8 8 0 0 1 16 0M12 17l4-7M3 20h18',plot:'M3 20h18M3 20V4M6 15l4-5 4 3 5-7',scope:'M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM6 12c1.5-5 3-5 4.5 0s3 5 4.5 0 2-3 3-3',cont:'M2 12h5l1.5-4 3 8 3-8 1.5 4h6',rs485:'M4 9h15l-3-3M20 15H5l3 3',info:'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v6M12 7.4v.4',close:'M6 6l12 12M18 6L6 18',minus:'M5 12h14',plus:'M5 12h14M12 5v14',edgeR:'M3 18h7V6h11M7 13l3-3 3 3',edgeF:'M3 6h7v12h11M7 11l3 3 3-3',edgeB:'M2 18h5V6h10v12h5',sound:'M4 10v4h4l5 4V6l-5 4zM17 9a4 4 0 0 1 0 6',zero:'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 9v6M9 12h6',zeroOff:'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM6.5 6.5l11 11',save:'M12 4v10M8 10l4 4 4-4M5 19h14',trash:'M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13',link:'M7 7l10 10-5 5V2l5 5L7 17',temp:'M10 14V5a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0zM12 17v-6',clock:'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 8v4l3 2',chev:'M9 5l7 7-7 7',send:'M4 12l16-8-6 16-2.5-6.5z',copy:'M9 9h10v11H9zM5 15V4h10',expand:'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',shrink:'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5',brand:'M3 12h4l2-6 4 12 3-9 1.5 3H21'};
 const IC_F={rec:'M12 6a6 6 0 1 0 0 12 6 6 0 0 0 0-12z',stop:'M6 6h12v12H6z',play:'M8 5l11 7-11 7z',left:'M15 5l-8 7 8 7z',right:'M9 5l8 7-8 7z',more:'M5 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM19 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z'};
@@ -836,7 +838,7 @@ function setConn(){
   $('btnConn').className=connected?'':'pri'; $('btnDemo').style.display=connected&&!demo?'none':''; $('btnDemo').classList.toggle('on',!!demo); $('btnDemo').textContent=demo?'デモ終了':'デモ'; $('demoChip').style.display=demo?'':'none'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
 // アプリの版。情報の画面に出す（GitHub に上げた版が新しいかどうかを見分けるため）
-const APP_VER='2026-11-26 r38';
+const APP_VER='2026-11-26 r40';
 let fwNum=0, sentLog=[], lastErr='', nSb=0, keyInit=false;
 // 本体のボタン操作など 1 文字の命令。ファーム 1.14 以上は !KEY= の行で送る（1 文字のままだと、行の一部が欠けたときに誤動作するため）
 function sendKey(k){ return send(fwNum>=1.14?'!KEY='+k+'\n':k); }
@@ -882,8 +884,8 @@ function showCfg(){
   $('btnLvAuto').classList.toggle('on',!!cfg.tla&&(!'RWS'.includes(cfg.tt)||!!cfg.tl2a));
   setSeg('segRl',String(cfg.rl||128));
   const tt=cfg.tt||'E'; setSeg('segTt',tt); setSeg('segPc',cfg.pc);
-  $('pwRow').style.display='PTS'.includes(tt)?'':'none'; $('pcBox').style.visibility='PS'.includes(tt)?'':'hidden';
-  $('pwLbl').textContent=tt==='P'?'パルス幅':tt==='T'?'待つ時間':'遷移時間'; $('pwVal').textContent=fmtT(cfg.pw); $('thVal').textContent=cfg.th?fmtT(cfg.th*1000):'なし';
+  $('pwRow').style.display='PTSI'.includes(tt)?'':'none'; $('pcBox').style.visibility='PS'.includes(tt)?'':'hidden';
+  $('pwLbl').textContent=tt==='P'?'パルス幅':tt==='T'?'待つ時間':tt==='I'?'休み':'遷移時間'; $('pwVal').textContent=fmtT(cfg.pw); $('thVal').textContent=cfg.th?fmtT(cfg.th*1000):'なし';
   $('segTe').style.opacity=tt==='X'?0.35:1; document.querySelector('#segTe [data-v=B]').style.display='EW'.includes(tt)?'':'none';
 }
 function fmtT(us){ return us<1000?us.toFixed(us<100?1:0)+'µs':us<1e6?(us/1000).toFixed(us<1e4?2:us<1e5?1:0)+'ms':(us/1e6).toFixed(2)+'s'; }
@@ -979,6 +981,10 @@ function demoTrig(f,us,PRE,maxI,d,lv,lv2){
         if(state===1){ if(x>=LL){ state=2; tEv=now; } }
         if(state===2){ if(x>=LH){ const wd=now-tEv; if(d.pc==='G'?wd>d.pw:wd<d.pw) ev=true; state=3; } else if(x<LL-hy) state=1; }
         else if(state===3){ if(x<LL-hy) state=1; }
+        break;
+      case 'I':   // 休み後: 設定時間以上レベルを越えなかった後の最初のエッジ（ファーム 1.32 と同じ）
+        if(state===0){ if(x<L1-hy){ state=1; tEv=now; } }
+        else if(x>=L1){ if(now-tEv>=d.pw) ev=true; state=0; }
         break;
       case 'X': if(i>=PRE&&Math.random()<0.02) ev=true; break;
       default:
@@ -1390,24 +1396,30 @@ function showRun(){
 // 時間軸: 画面全体の時間 = 本体のサンプル間隔 × 127 ÷ hZoom。hZoom が範囲を外れたら本体の間隔を切り替える（見かけの倍率は連続）
 function screenTime(){ return US_NOM[cfg.tb|0]*((cfg.rl||128)-1)/hZoom; }
 function normZoom(){
-  const tb=cfg.tb|0, now=Date.now();
-  if(now-tbSwitchAt>350){
+  // r40: 拡大しても、画面に 100 点以上あるうちは取り込みの間隔を変えない（記録が画面より長いまま残り、左右にずらして見られる）。
+  //      止めているときは取り直さないので、間隔は変えずに拡大だけする。
+  const tb=cfg.tb|0, now=Date.now(), rl=cfg.rl||128, stop=scState==='stop';
+  if(!stop&&now-tbSwitchAt>350){
     if(hZoom<1&&tb<US_NOM.length-1){ hZoom*=US_NOM[tb+1]/US_NOM[tb]; cfg.tb=tb+1; tbSwitchAt=now; send('!TB='+tbFw(cfg.tb)+'\n'); }
-    else if(tb>0&&hZoom>=US_NOM[tb]/US_NOM[tb-1]){ hZoom/=US_NOM[tb]/US_NOM[tb-1]; cfg.tb=tb-1; tbSwitchAt=now; send('!TB='+tbFw(cfg.tb)+'\n'); }
+    else if(tb>0&&(rl-1)/hZoom<100&&hZoom>=US_NOM[tb]/US_NOM[tb-1]){ hZoom/=US_NOM[tb]/US_NOM[tb-1]; cfg.tb=tb-1; tbSwitchAt=now; send('!TB='+tbFw(cfg.tb)+'\n'); }
   }
-  const t2=cfg.tb|0; hZoom=Math.min(t2===0?16*(cfg.rl||128)/128:US_NOM[t2]/US_NOM[t2-1]*1.3,Math.max(t2===US_NOM.length-1?1:0.7,hZoom));
+  const t2=cfg.tb|0, r=t2>0?US_NOM[t2]/US_NOM[t2-1]:1;
+  const zmax=(stop||t2===0)?Math.max(1,(rl-1)/8):Math.max(r,(rl-1)/100)*1.3, zmin=(stop||t2===US_NOM.length-1)?1:0.7;
+  hZoom=Math.min(zmax,Math.max(zmin,hZoom));
 }
 // r23: 「時間 / 目盛」を 1・2・5 の切りのよい値にそろえる（以前は 103µs のような半端な値になった）
 function divList(){ const o=[]; for(let e=0;e<8;e++) for(const m of [1,2,5]) o.push(m*Math.pow(10,e)); return o; }   // 1µs 〜 50s
-function divRange(){ const rl=(cfg.rl||128); return [US_NOM[0]*(rl-1)/(16*rl/128)/10, US_NOM[US_NOM.length-1]*(rl-1)/10]; }
+function divRange(){ const rl=(cfg.rl||128); if(scState==='stop'){ const u=US_NOM[cfg.tb|0]; return [u*8/10,u*(rl-1)/10]; } return [US_NOM[0]*(rl-1)/(16*rl/128)/10, US_NOM[US_NOM.length-1]*(rl-1)/10]; }
 function divOk(){ const [lo,hi]=divRange(); return divList().filter(d=>d>=lo*0.999&&d<=hi*1.001); }
-function setDiv(d){
-  const st=d*10, rl=(cfg.rl||128); let tb=US_NOM.length-1;
-  for(let i=0;i<US_NOM.length;i++){ if(US_NOM[i]*(rl-1)>=st*0.999){ tb=i; break; } }   // 画面を埋められる中で、いちばん細かい取り込み間隔
-  hZoom=Math.max(1e-6,US_NOM[tb]*(rl-1)/st);
-  if(tb!==(cfg.tb|0)){ cfg.tb=tb; tbSwitchAt=Date.now(); if(connected) send('!TB='+tbFw(tb)+'\n'); }
+function setDiv(d,keep){
+  const st=d*10, rl=(cfg.rl||128), cur=cfg.tb|0, stop=scState==='stop'; let tb=US_NOM.length-1;
+  if(stop) tb=cur;                                                                  // 止めているときは拡大だけ
+  else if(keep&&US_NOM[cur]*(rl-1)>=st*0.999&&st/US_NOM[cur]>=100) tb=cur;          // ピンチの拡大: 記録を画面より長く保つ
+  else for(let i=0;i<US_NOM.length;i++){ if(US_NOM[i]*(rl-1)>=st*0.999){ tb=i; break; } }   // 画面を埋められる中で、いちばん細かい取り込み間隔
+  hZoom=Math.max(stop?1:1e-6,US_NOM[tb]*(rl-1)/st);
+  if(tb!==cur){ cfg.tb=tb; tbSwitchAt=Date.now(); hPan=0; if(connected) send('!TB='+tbFw(tb)+'\n'); }
 }
-function snapDiv(){ const cur=screenTime()/10, L=divOk(); if(!L.length) return; let b=L[0]; for(const d of L) if(Math.abs(Math.log(d/cur))<Math.abs(Math.log(b/cur))) b=d; setDiv(b); }
+function snapDiv(){ const cur=screenTime()/10, L=divOk(); if(!L.length) return; let b=L[0]; for(const d of L) if(Math.abs(Math.log(d/cur))<Math.abs(Math.log(b/cur))) b=d; setDiv(b,true); }
 function niceNum(val,dv){ if(Math.abs(val)<dv*1e-6) return '0'; const a=Math.abs(val); return val.toFixed(dv>=1?(a%1<1e-9?0:1):dv>=0.1?1:dv>=0.01?2:3); }
 function drawScope(){
   animReq=false;
@@ -1436,7 +1448,10 @@ function drawScope(){
   // トリガ点（サンプルの間を補間）を基準に、時間で横位置を決める
   let cpos=sc&&sc.pre!==undefined?sc.pre:0;
   if(sc&&sc.trig&&sc.pre>0){ const a=v[sc.pre-1],b=v[sc.pre]; if(b!==a){ const f=(sc.lv-a)/(b-a); if(f>=0&&f<=1) cpos=sc.pre-1+f; } }
-  const usPt=sc?sc.us:US_NOM[cfg.tb|0], XI=i=>W*(D.tf+(i-cpos)*usPt/D.st), IX=f=>cpos+(f-D.tf)*D.st/usPt;
+  const usPt=sc?sc.us:US_NOM[cfg.tb|0];
+  // r40: 記録が画面より長いときは、左右にずらして記録の外側を見られる。記録の端を越えないように抑える
+  { if(sc){ const lo=-cpos*usPt+T.tf*T.st, hi=(n-1-cpos)*usPt-(1-T.tf)*T.st; hPan=hi<lo?0:Math.min(hi,Math.max(lo,hPan)); } else hPan=0; D.pan=hPan; }
+  const XI=i=>W*(D.tf+((i-cpos)*usPt-D.pan)/D.st), IX=f=>cpos+((f-D.tf)*D.st+D.pan)/usPt;
   geo={W,H,NY};
   // 目盛
   c.lineWidth=1;
@@ -1461,7 +1476,7 @@ function drawScope(){
   if('RWS'.includes(cfg.tt)){ const l2=lv2Drag!==null?lv2Drag:(sc&&cfg.tl2a&&sc.lv2!==undefined?sc.lv2:cfg.tl2), y2=Math.min(H-11,Math.max(11,Y(l2)));
     c.setLineDash([3,4]); c.strokeStyle='#ff9f6b'; c.beginPath(); c.moveTo(0,y2); c.lineTo(W,y2); c.stroke(); c.setLineDash([]);
     c.fillStyle='#ff9f6b'; c.beginPath(); c.moveTo(W,y2-11); c.lineTo(W-9,y2-11); c.lineTo(W-20,y2); c.lineTo(W-9,y2+11); c.lineTo(W,y2+11); c.fill(); c.fillStyle='#04121f'; c.font='bold 11px -apple-system,sans-serif'; c.textAlign='center'; c.textBaseline='middle'; c.fillText('2',W-7,y2); c.font='10px -apple-system,sans-serif'; }
-  { const xt=W*D.tf; c.fillStyle=sc&&sc.trig?'#3ddc97':'#55627f'; c.beginPath(); c.moveTo(xt-6,0); c.lineTo(xt+6,0); c.lineTo(xt,9); c.fill(); }
+  { const xt=W*(D.tf-D.pan/D.st); if(xt>-8&&xt<W+8){ c.fillStyle=sc&&sc.trig?'#3ddc97':'#55627f'; c.beginPath(); c.moveTo(xt-6,0); c.lineTo(xt+6,0); c.lineTo(xt,9); c.fill(); } }
   // 波形（拡大時は点も打つ）
   if(sc){
     c.save(); c.beginPath(); c.rect(0,0,W,H); c.clip();
@@ -1476,6 +1491,10 @@ function drawScope(){
     }
     c.restore();
   }
+  // r40: 記録全体のどこを見ているか（記録が画面より長いときだけ、下に細い帯で出す）
+  if(sc){ const rec=(n-1)*usPt; if(rec>D.st*1.03){ const t0=D.pan-D.tf*D.st+cpos*usPt, f0=Math.max(0,t0/rec), f1=Math.min(1,(t0+D.st)/rec), bx=W*0.3, bw=W*0.4, by=H-9;
+    c.fillStyle='rgba(120,140,180,.35)'; c.fillRect(bx,by,bw,4); c.fillStyle='#9fb6e6'; c.fillRect(bx+bw*f0,by-1,Math.max(3,bw*(f1-f0)),6);
+    const ft=cpos/(n-1); c.fillStyle=sc.trig?'#3ddc97':'#8a97b4'; c.fillRect(bx+bw*ft-1,by-3,2,10); } }
   // r38: UART 解読の枠と値
   if(ud.on&&sc) decDraw(c,W,H,XI); else decShowList(null);
   // カーソル
@@ -1484,7 +1503,7 @@ function drawScope(){
     if(curMode&1){
       [[curA,'#4cc2ff','A'],[curB,'#ff7ad9','B']].forEach(([f,col,nm])=>{ const x=W*f; c.strokeStyle=col; c.lineWidth=1.5; c.beginPath(); c.moveTo(x,0); c.lineTo(x,H); c.stroke();
         c.fillStyle=col; c.fillRect(x-9,H-18,18,18); c.fillStyle='#04121f'; c.textAlign='center'; c.textBaseline='middle'; c.font='bold 12px -apple-system,sans-serif'; c.fillText(nm,x,H-9); });
-      const at=f=>v[Math.min(n-1,Math.max(0,Math.round(IX(f))))], ta=(curA-D.tf)*D.st, tb=(curB-D.tf)*D.st, dt=Math.abs(tb-ta);
+      const at=f=>v[Math.min(n-1,Math.max(0,Math.round(IX(f))))], ta=(curA-D.tf)*D.st+D.pan, tb=(curB-D.tf)*D.st+D.pan, dt=Math.abs(tb-ta);
       h+='<b>A</b> '+(ta<0?'-':'')+fmtT(Math.abs(ta))+' / '+fmtV(at(curA),1)+'V　<u>B</u> '+(tb<0?'-':'')+fmtT(Math.abs(tb))+' / '+fmtV(at(curB),1)+'V　Δt '+fmtT(dt)+'　'+(dt>0?fmtHz(1e6/dt):'--');
     }
     if(curMode&2){
@@ -1555,7 +1574,7 @@ function drawScope(){
     if(pts.size===2){ finish(); gesture=true; const p=[...pts.values()]; pinch={dx:Math.abs(p[0][0]-p[1][0])*w,dy:Math.abs(p[0][1]-p[1][1])*h,z:hZoom,vd:vDiv}; pinch.hor=pinch.dx>=pinch.dy; return; }
     if(pts.size>2) return;
     const now=Date.now();
-    if(now-lastTap<300){ lastTap=0; gesture=false; vAuto=true; saveUiPrefs(); hZoom=Math.max(1,Math.min(hZoom,1)); cfg.tp=64; send('!TP=64\n'); drawScope(); return; } lastTap=now;
+    if(now-lastTap<300){ lastTap=0; gesture=false; vAuto=true; saveUiPrefs(); hZoom=Math.max(1,Math.min(hZoom,1)); hPan=0; cfg.tp=64; send('!TP=64\n'); drawScope(); return; } lastTap=now;
     const lv=sc&&cfg.tla?sc.lv:cfg.tl, yl=0.5-(lv-vCen)/(8*vDiv);
     const yl2=0.5-(cfg.tl2-vCen)/(8*vDiv), has2='RWS'.includes(cfg.tt);
     if(has2&&fx*w>w-56&&Math.abs(fy-yl2)*h<26&&Math.abs(fy-yl2)<Math.abs(fy-yl)) drag={k:'trig2'};
@@ -1564,7 +1583,7 @@ function drawScope(){
     else if((curMode&1)&&Math.abs(fx-curB)*w<26) drag={k:'B'};
     else if((curMode&2)&&Math.abs(fy-curC)*h<26&&Math.abs(fy-curC)<=Math.abs(fy-curD)) drag={k:'C'};
     else if((curMode&2)&&Math.abs(fy-curD)*h<26) drag={k:'D'};
-    else drag={k:'pan',x:fx,y:fy,c:vCen,p:cfg.tp,moved:false};
+    else drag={k:'pan',x:fx,y:fy,c:vCen,p:cfg.tp,pan0:hPan,view:sc&&D&&sc.v.length*(sc.us||1)>D.st*1.03,moved:false};
   });
   cv.addEventListener('pointermove',e=>{
     if(!pts.has(e.pointerId)) return; e.preventDefault();
@@ -1585,7 +1604,8 @@ function drawScope(){
       if(!drag.moved&&Math.hypot((fx-drag.x)*w,(fy-drag.y)*h)<6) return;
       drag.moved=true; lastTap=0;
       if(Math.abs(fy-drag.y)*h>4){ vAuto=false; vCen=drag.c+(fy-drag.y)*8*vDiv; saveUiPrefs(); }
-      preDrag=Math.min(123,Math.max(4,drag.p+(fx-drag.x)*127)); sendTp(false);
+      if(drag.view) hPan=drag.pan0-(fx-drag.x)*D.st;   // r40: 記録が画面より長いときは表示をずらす（取り込みの設定は変えない）
+      else { preDrag=Math.min(123,Math.max(4,drag.p+(fx-drag.x)*127)); sendTp(false); }
     }
     drawScope();
   });
@@ -1810,6 +1830,19 @@ document.querySelectorAll('#segDecPol button').forEach(b=>b.onclick=()=>{ ud.pol
 document.querySelectorAll('#segDecTh button').forEach(b=>b.onclick=()=>{ ud.tha=b.dataset.v==='a'; decSave(); decUi(); drawScope(); });
 $('decThIn').onchange=()=>{ const x=+$('decThIn').value; if(isFinite(x)&&Math.abs(x)<=60){ ud.th=x; decSave(); } decUi(); drawScope(); };
 document.querySelectorAll('#segDecPa button').forEach(b=>b.onclick=()=>{ ud.pa=b.dataset.v; decSave(); decUi(); drawScope(); });
+// r39: 1.5 文字分以上レベルを越えなかった後の、スタートビットの縁で掛ける（休み後トリガ）
+$('btnDecTrig').onclick=async()=>{
+  if(!connected){ msg('本体につないでから使ってください'); return; }
+  if(!demo&&fwNum<1.32){ msg('「休み後」は本体のファーム 1.32 以上が必要です。'); return; }
+  const nb=8+(ud.pa==='N'?0:1), pw=Math.max(20,Math.min(200000,Math.round((nb+2)*1.5*1e6/decBaud())));
+  let th=ud.tha?0:ud.th, sp=ud.pol<0?3:-3;
+  if(sc&&sc.v&&sc.v.length){ let mn=Infinity,mx=-Infinity; for(const x of sc.v){ if(x<mn) mn=x; if(x>mx) mx=x; } if(mx-mn>0.5){ if(ud.tha) th=(mx+mn)/2; sp=ud.pol<0?mx:mn; } }
+  const lv=+((th+sp)/2).toFixed(3), te=ud.pol<0?'R':'F';
+  cfg.tt='I'; cfg.te=te; cfg.pw=pw; cfg.tm='N'; cfg.tla=0; cfg.tl=lv; showCfg(); drawScope();
+  await send('!TT=I\n'); await send('!TE='+te+'\n'); await send('!PW='+pw+'\n'); await send('!TM=N\n'); await send('!TL='+lv.toFixed(3)+'\n');
+  if(scState!=='stop'){ scWait=false; scRequest(); }
+  msg('トリガ: 休み後 '+fmtT(pw)+'・'+(te==='R'?'立上り':'立下り')+' '+fmtD(lv)+'・ノーマル');
+};
 $('scDec').onclick=()=>{ const r=decRun(); if(!r||!r.chars.length) return; const t=r.chars.map(ch=>hex2(ch.b)).join(' '); try{ navigator.clipboard.writeText(t).then(()=>msg('コピーしました: '+t.slice(0,60)),()=>{}); }catch(e){} };
 decUi();
 $('btnFftWin').onclick=()=>{ fftHann=!fftHann; $('btnFftWin').textContent=fftHann?'窓: ハン':'窓: なし'; $('btnFftWin').classList.toggle('on',fftHann); saveUiPrefs(); drawScope(); };
@@ -1853,10 +1886,10 @@ $('btnFftWin').onclick=()=>{ fftHann=!fftHann; $('btnFftWin').textContent=fftHan
   cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',e=>{ pts.delete(e.pointerId); pinch=null; drag=null; });
 })();
 // トリガの種類と条件（判定は本体ファーム v1.00 以上が行う）
-document.querySelectorAll('#segRl button').forEach(b=>b.onclick=()=>{ if(!connected) return; if(!fwRl){ msg('記録の長さの変更は、本体のファーム 1.13 以上が必要です。'); return; } hZoom=1; trigSet('RL','rl',+b.dataset.v); cfg.rl=+b.dataset.v; snapDiv(); drawScope(); });
+document.querySelectorAll('#segRl button').forEach(b=>b.onclick=()=>{ if(!connected) return; if(!fwRl){ msg('記録の長さの変更は、本体のファーム 1.13 以上が必要です。'); return; } hZoom=1; hPan=0; trigSet('RL','rl',+b.dataset.v); cfg.rl=+b.dataset.v; snapDiv(); drawScope(); });
 function needNew(){ if(fwNew) return true; msg('このトリガは本体のファーム 1.00 以上が必要です。'); return false; }
 async function trigSet(cmd,key,val){ if(!connected) return; cfg[key]=val; showCfg(); drawScope(); await send('!'+cmd+'='+val+'\n'); if(scState!=='stop'){ scWait=false; scRequest(); } }
-document.querySelectorAll('#segTt button').forEach(b=>b.onclick=()=>{ if(b.dataset.v!=='E'&&!needNew()) return; if(!'EW'.includes(b.dataset.v)&&cfg.te==='B') trigSet('TE','te','R'); trigSet('TT','tt',b.dataset.v); });
+document.querySelectorAll('#segTt button').forEach(b=>b.onclick=()=>{ if(b.dataset.v!=='E'&&!needNew()) return; if(b.dataset.v==='I'&&!demo&&fwNum<1.32){ msg('「休み後」は本体のファーム 1.32 以上が必要です。'); return; } if(!'EW'.includes(b.dataset.v)&&cfg.te==='B') trigSet('TE','te','R'); trigSet('TT','tt',b.dataset.v); });
 document.querySelectorAll('#segPc button').forEach(b=>b.onclick=()=>{ if(needNew()) trigSet('PC','pc',b.dataset.v); });
 function stepList(L,cur,d){ let i=L.findIndex(x=>x>=cur); if(i<0) i=L.length-1; return L[Math.min(L.length-1,Math.max(0,i+d))]; }
 $('pwDn').onclick=()=>{ if(needNew()) trigSet('PW','pw',stepList(PWS,cfg.pw,-1)); };
@@ -1864,7 +1897,7 @@ $('pwUp').onclick=()=>{ if(needNew()) trigSet('PW','pw',stepList(PWS,cfg.pw,1));
 $('thDn').onclick=()=>{ if(needNew()) trigSet('TH','th',stepList(THS,cfg.th,-1)); };
 $('thUp').onclick=()=>{ if(needNew()) trigSet('TH','th',stepList(THS,cfg.th,1)); };
 $('btnLvAuto').onclick=()=>{ send('!TL=A\n'); if(fwNew) send('!TL2=A\n'); };
-$('btnTpMid').onclick=()=>{ cfg.tp=64; send('!TP=64\n'); drawScope(); };
+$('btnTpMid').onclick=()=>{ hPan=0; cfg.tp=64; send('!TP=64\n'); drawScope(); };
 $('btnMeas').onclick=()=>{ const off=$('scMeas').classList.toggle('off'); $('btnMeas').classList.toggle('on',!off); drawScope(); };
 $('btnScCsv').onclick=()=>{ if(sc) saveCsv('scope.csv','t_us,volt\n'+sc.v.map((y,i)=>(i*sc.us).toFixed(1)+','+y).join('\n')); };
 $('scTbQuick').onclick=()=>sheet('shAxis');
