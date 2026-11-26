@@ -841,7 +841,7 @@ function setConn(){
   $('btnConn').className=connected?'':'pri'; $('btnDemo').style.display=connected&&!demo?'none':''; $('btnDemo').classList.toggle('on',!!demo); $('btnDemo').textContent=demo?'デモ終了':'デモ'; $('demoChip').style.display=demo?'':'none'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
 // アプリの版。情報の画面に出す（GitHub に上げた版が新しいかどうかを見分けるため）
-const APP_VER='2026-11-26 r41';
+const APP_VER='2026-11-26 r42';
 let fwNum=0, sentLog=[], lastErr='', nSb=0, keyInit=false;
 // 本体のボタン操作など 1 文字の命令。ファーム 1.14 以上は !KEY= の行で送る（1 文字のままだと、行の一部が欠けたときに誤動作するため）
 function sendKey(k){ return send(fwNum>=1.14?'!KEY='+k+'\n':k); }
@@ -1077,9 +1077,9 @@ function handle(o){
   }else if(o.c){
     devMode='C'; contLast=Date.now();
     const box=$('contBox'),short=o.s==='SHORT';
-    box.className=short?'short':o.s==='VOLT'?'volt':'';
-    $('contWord').textContent={SHORT:'導通',OPEN:'開放',R:'抵抗あり',VOLT:'電圧あり',CHK:'確認中'}[o.s]||o.s;
-    $('contOhm').textContent=o.s==='VOLT'?'外部電圧 '+fmtV(o.ext,1)+' V':(o.s==='SHORT'||o.s==='R')?(o.ohm>=1000?(o.ohm/1000).toFixed(1)+' kΩ':o.ohm.toFixed(0)+' Ω')+(o.zero?'　ゼロ調整 '+o.zero.toFixed(0)+'Ω':''):'\u00a0';
+    box.className=short?'short':(o.s==='VOLT'||o.s==='FAULT')?'volt':'';
+    $('contWord').textContent={SHORT:'導通',OPEN:'開放',R:'抵抗あり',VOLT:'電圧あり',CHK:'確認中',OFF:'停止中',FAULT:'電圧を検出'}[o.s]||o.s;
+    $('contOhm').textContent=o.s==='OFF'?'本体の SW2 長押しで測定を始めます':o.s==='FAULT'?'外部電圧 '+fmtV(o.ext,1)+' V　本体の SW2 で解除':o.s==='VOLT'?'外部電圧 '+fmtV(o.ext,1)+' V':(o.s==='SHORT'||o.s==='R')?(o.ohm>=1000?(o.ohm/1000).toFixed(1)+' kΩ':o.ohm.toFixed(0)+' Ω')+(o.zero?'　ゼロ調整 '+o.zero.toFixed(0)+'Ω':''):'\u00a0';
     tone(short&&tab==='cont');
   }else if(o.cfg){
     const keep=lvDrag!==null?cfg.tl:null, keepP=preDrag!==null?cfg.tp:null; const _ptb=cfg.tb, _prl=cfg.rl; if(o.tb>=11) setTbTable(US_121,TB_121); else if(o.tb>=9&&US_NOM!==US_121) setTbTable(US_116,TB_116); else if(o.tb>=US_NOM.length) setTbTable(US_NEW,null);
