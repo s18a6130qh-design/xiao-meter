@@ -664,8 +664,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
     <div class="g"><div class="knob"><button id="vdDn"><i data-ic="minus"></i></button><div id="vdBox"><span>電圧 / 目盛</span><b id="vdVal">自動</b></div><button id="vdUp"><i data-ic="plus"></i></button></div></div>
   </div>
   <div class="lbl" style="margin-top:6px">記録の長さ</div>
-  <div class="g"><div class="seg" id="segRl"><button data-v="128">128</button><button data-v="256">256</button><button data-v="512">512</button><button data-v="1024">1024</button></div></div>
-  <div class="g"><div class="seg" id="segRm"><button data-v="w">前後も記録</button><button data-v="f">画面に詰める</button></div></div>
+  <div class="g"><div class="seg" id="segRl"><button data-v="128">128</button><button data-v="256">256</button><button data-v="512">512</button><button data-v="1024">1024</button><button data-v="4096">4096</button><button data-v="16384">16384</button></div></div>
 </div>
 <div class="sheet" id="shTrig"><button class="x"><i data-ic="close"></i></button>
   <div class="g"><div class="seg wrap" id="segTt"><button data-v="E">エッジ</button><button data-v="P">パルス幅</button><button data-v="T">タイムアウト</button><button data-v="R">ラント</button><button data-v="W">ウィンドウ</button><button data-v="S">スロープ</button><button data-v="I">休み後</button><button data-v="X">RS-485</button></div></div>
@@ -765,8 +764,7 @@ let nBad=0,wq=Promise.resolve(),devMode='V',tab='scope',nLines=0,nErr=0;
 let hold=false,st={min:Infinity,max:-Infinity,sum:0,n:0};
 let plot=[],plotRun=true,plotWin=120;
 let sc=null,scState='run',scWait=false,scTimer=null,scWatch=null,scLastId=-1,scWaiting=false,cfg={tm:'A',te:'R',tla:1,tl:0,tb:0,tp:64,tt:'E',pc:'G',pw:1000,tl2a:1,tl2:0,th:0,rl:128},fwOk=true,fwRl=false,fwNew=false,lv2Drag=null,streaming=false,lastScAt=0,fps=0,preDrag=null,tpSent=0;
-let hPan=0, recMode='w';   // recMode: w=画面は約 128 点で、残りの記録を前後に使う / f=記録を全部画面に詰める
-try{ if(localStorage.getItem('xm_rm')==='f') recMode='f'; }catch(e){}
+let hPan=0, recMode='f';   // r43: 常に 'f'（拡大した画面の細かさで取り込む）。'w' は使わない   // recMode: w=画面は約 128 点で、残りの記録を前後に使う / f=記録を全部画面に詰める
    // r40: 拡大したときの表示の左右のずらし（µs、トリガ点が基準）
 let vAuto=true,vDiv=0.5,vCen=0,hZoom=1,tbSwitchAt=0,D=null,animReq=false,gesture=false;
 // 本体の時間軸（µs/点）。ファーム 1.10 以上は SPI 取り込みで 9 段、それより前は 3 段
@@ -841,7 +839,7 @@ function setConn(){
   $('btnConn').className=connected?'':'pri'; $('btnDemo').style.display=connected&&!demo?'none':''; $('btnDemo').classList.toggle('on',!!demo); $('btnDemo').textContent=demo?'デモ終了':'デモ'; $('demoChip').style.display=demo?'':'none'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
 // アプリの版。情報の画面に出す（GitHub に上げた版が新しいかどうかを見分けるため）
-const APP_VER='2026-11-26 r42';
+const APP_VER='2026-11-27 r44';
 let fwNum=0, sentLog=[], lastErr='', nSb=0, keyInit=false;
 // 本体のボタン操作など 1 文字の命令。ファーム 1.14 以上は !KEY= の行で送る（1 文字のままだと、行の一部が欠けたときに誤動作するため）
 function sendKey(k){ return send(fwNum>=1.14?'!KEY='+k+'\n':k); }
@@ -1048,6 +1046,9 @@ function handle(o){
     }
     // sb の m は校正の傾き（数値）。電圧行の m（画面を表す文字）と同じ名前なので、ここで外しておく
     o.v=v; o.sc=1; o.calM=o.m; delete o.m; nSb++;
+    // r44（ファーム 1.34〜）: 本体は長い記録を持ち、画面に要る範囲だけを送る。N=記録全体の点数、vs=範囲の先頭、vc=範囲の点数、vd=最小・最大にまとめた
+    { const N=o.N!==undefined?o.N|0:v.length, vs=o.vs|0, vc=o.vc!==undefined?o.vc|0:v.length, step=vc/v.length;
+      o.Nfull=N; o.vs=vs; o.step=step; o.dec=!!o.vd; o.usBase=o.us; o.preFull=o.pre; o.us=o.us*step; o.pre=Math.round((o.pre-vs)/step); }
   }
   if(typeof o.m==='string'){
     devMode=o.m; followDev();
@@ -1087,7 +1088,9 @@ function handle(o){
   }else if(o.scw){
     scWaiting=true; if(sc) drawScope();
   }else if(o.sc){
-    if(scState==='stop') return;
+    const resend=scState==='stop'&&sc&&o.id===sc.id;   // r44: 止めているときに範囲を変えて送り直してもらった分
+    if(scState==='stop'&&!resend) return;
+    if(resend){ sc=o; drawScope(); return; }
     const nowT=Date.now(); if(lastScAt&&nowT-lastScAt<2000) fps=fps*0.7+0.3*1000/(nowT-lastScAt); lastScAt=nowT;
     scWaiting=(o.id===scLastId); scLastId=o.id;
     sc=o; scWait=false; clearTimeout(scWatch);
@@ -1347,6 +1350,7 @@ function uartDecode(v,us,baud,pol,th,pa){
 }
 function decRun(){
   if(!ud.on||!sc) return null;
+  if(sc.dec) return {bit:NaN,th:0,chars:[],dec:true};
   const key=[decBaud(),ud.pol,ud.tha?'a':ud.th,ud.pa].join(',');
   if(decCache.sc===sc&&decCache.key===key) return decCache.r;
   const r=uartDecode(sc.v,sc.us,decBaud(),ud.pol,ud.tha?null:ud.th,ud.pa);
@@ -1360,8 +1364,9 @@ function decShowList(r){
   if(!ud.on||!sc){ box.style.display='none'; return; }
   box.style.display='block';
   const bd=decBaud(), weak=r&&r.bit<4;
-  let h='<div class="dh"><b>UART '+bd+'bps</b><span>'+(r?'1 ビット '+r.bit.toFixed(1)+' 点 · しきい値 '+fmtV(r.th,1)+'V · '+r.chars.length+' 文字':'')+'</span>'+(weak?'<em>参考</em>':'')+'</div>';
-  if(r&&r.bit<1) h+='<div class="dw">時間軸を速くしてください（いまは 1 ビット '+r.bit.toFixed(1)+' 点）</div>';
+  let h='<div class="dh"><b>UART '+bd+'bps</b><span>'+(r&&!r.dec?'1 ビット '+r.bit.toFixed(1)+' 点 · しきい値 '+fmtV(r.th,1)+'V · '+r.chars.length+' 文字':'')+'</span>'+(weak?'<em>参考</em>':'')+'</div>';
+  if(r&&r.dec) h+='<div class="dw">拡大すると解読します</div>';
+  else if(r&&r.bit<1) h+='<div class="dw">時間軸を速くしてください（いまは 1 ビット '+r.bit.toFixed(1)+' 点）</div>';
   else if(weak) h+='<div class="dw">時間軸を速くしてください（いまは 1 ビット '+r.bit.toFixed(1)+' 点）</div>';
   if(r&&r.chars.length){
     h+='<div class="dl">'+r.chars.map(ch=>{ const e=ch.se||ch.pe; return '<span class="dc'+(e?' ng':'')+'"><b>'+esc(ud.fmt==='asc'?decAsc(ch.b):hex2(ch.b))+(e?'!':'')+'</b><small>'+esc(ud.fmt==='asc'?hex2(ch.b):decAsc(ch.b))+'</small></span>'; }).join('')+'</div>';
@@ -1389,6 +1394,24 @@ function decUi(){
   setSeg('segDecBd',ud.bdx>0?'x':ud.bd); $('decBdRow').style.display=ud.bdx>0?'':'none'; if(ud.bdx>0&&document.activeElement!==$('decBdIn')) $('decBdIn').value=ud.bdx;
   setSeg('segDecPol',ud.pol); setSeg('segDecTh',ud.tha?'a':'m'); $('decThRow').style.display=ud.tha?'none':''; if(!ud.tha&&document.activeElement!==$('decThIn')) $('decThIn').value=ud.th;
   setSeg('segDecPa',ud.pa);
+}
+// r44: 画面に映る範囲（記録の中の番号）を本体に伝える。止めているときは、その範囲で送り直してもらう
+let vwSent={a:-1,c:-1}, vwAt=0, vwTimer=0;
+function scViewSync(){
+  if(!connected||demo||!sc||!sc.Nfull||!(fwNum>=1.34)||!D) return;
+  const NF=sc.Nfull, ub=sc.usBase, pf=sc.preFull, st=D.st, tf=D.tf, pan=scState==='stop'?D.pan:0;
+  let a, c;
+  if(NF<=1024&&scState!=='stop'){ a=0; c=0; }
+  else {
+    const iL=pf+(-tf*st+pan)/ub, iR=iL+st/ub, m=(iR-iL)*0.03;
+    a=Math.max(0,Math.floor(iL-m)); const b=Math.min(NF-1,Math.ceil(iR+m)); c=b-a+1;
+    if(c>=NF*0.98){ a=0; c=0; }
+  }
+  const same=(a===vwSent.a&&c===vwSent.c)||(c>0&&vwSent.c>0&&Math.abs(a-vwSent.a)<Math.max(2,c*0.02)&&Math.abs(c-vwSent.c)<Math.max(2,c*0.02));
+  if(same) return;
+  clearTimeout(vwTimer);
+  const go=()=>{ vwSent={a:a,c:c}; vwAt=Date.now(); send('!VW='+a+','+c+'\n'); if(scState==='stop') send('!VS\n'); };
+  const wait=150-(Date.now()-vwAt); if(wait<=0) go(); else vwTimer=setTimeout(go,wait);
 }
 function scRange(){ let mn=Infinity,mx=-Infinity; sc.v.forEach(x=>{mn=Math.min(mn,x);mx=Math.max(mx,x);}); return [mn,mx]; }
 function showRun(){
@@ -1455,10 +1478,10 @@ function drawScope(){
   const Y=val=>H*(0.5-(val-D.vCen)/(NY*D.vDiv));
   // トリガ点（サンプルの間を補間）を基準に、時間で横位置を決める
   let cpos=sc&&sc.pre!==undefined?sc.pre:0;
-  if(sc&&sc.trig&&sc.pre>0){ const a=v[sc.pre-1],b=v[sc.pre]; if(b!==a){ const f=(sc.lv-a)/(b-a); if(f>=0&&f<=1) cpos=sc.pre-1+f; } }
+  if(sc&&sc.trig&&!sc.dec&&sc.pre>0&&sc.pre<n){ const a=v[sc.pre-1],b=v[sc.pre]; if(b!==a){ const f=(sc.lv-a)/(b-a); if(f>=0&&f<=1) cpos=sc.pre-1+f; } }
   const usPt=sc?sc.us:US_NOM[cfg.tb|0];
   // r40: 記録が画面より長いときは、左右にずらして記録の外側を見られる。記録の端を越えないように抑える
-  { if(sc){ const lo=-cpos*usPt+T.tf*T.st, hi=(n-1-cpos)*usPt-(1-T.tf)*T.st; hPan=hi<lo?0:Math.min(hi,Math.max(lo,hPan)); } else hPan=0; D.pan=hPan; }
+  { if(sc&&scState==='stop'){ const ub=sc.usBase||usPt, pf=sc.preFull!==undefined?sc.preFull:cpos, NF=sc.Nfull||n, lo=-pf*ub+T.tf*T.st, hi=(NF-1-pf)*ub-(1-T.tf)*T.st; hPan=hi<lo?0:Math.min(hi,Math.max(lo,hPan)); } else hPan=0; D.pan=hPan; }
   const XI=i=>W*(D.tf+((i-cpos)*usPt-D.pan)/D.st), IX=f=>cpos+((f-D.tf)*D.st+D.pan)/usPt;
   geo={W,H,NY};
   // 目盛
@@ -1499,10 +1522,11 @@ function drawScope(){
     }
     c.restore();
   }
+  scViewSync();
   // r40: 記録全体のどこを見ているか（記録が画面より長いときだけ、下に細い帯で出す）
-  if(sc){ const rec=(n-1)*usPt; if(rec>D.st*1.03){ const t0=D.pan-D.tf*D.st+cpos*usPt, f0=Math.max(0,t0/rec), f1=Math.min(1,(t0+D.st)/rec), bx=W*0.3, bw=W*0.4, by=H-9;
+  if(sc){ const ub=sc.usBase||usPt, NF=sc.Nfull||n, pf=sc.preFull!==undefined?sc.preFull:cpos, rec=(NF-1)*ub; if(rec>D.st*1.03){ const t0=D.pan-D.tf*D.st+pf*ub, f0=Math.max(0,t0/rec), f1=Math.min(1,(t0+D.st)/rec), bx=W*0.3, bw=W*0.4, by=H-9;
     c.fillStyle='rgba(120,140,180,.35)'; c.fillRect(bx,by,bw,4); c.fillStyle='#9fb6e6'; c.fillRect(bx+bw*f0,by-1,Math.max(3,bw*(f1-f0)),6);
-    const ft=cpos/(n-1); c.fillStyle=sc.trig?'#3ddc97':'#8a97b4'; c.fillRect(bx+bw*ft-1,by-3,2,10); } }
+    const ft=pf/(NF-1); c.fillStyle=sc.trig?'#3ddc97':'#8a97b4'; c.fillRect(bx+bw*ft-1,by-3,2,10); } }
   // r38: UART 解読の枠と値
   if(ud.on&&sc) decDraw(c,W,H,XI); else decShowList(null);
   // カーソル
@@ -1557,8 +1581,8 @@ function drawScope(){
   $('scTrSub').textContent=(cfg.tm==='N'?'NORMAL':'AUTO')+'  '+(cfg.tt==='X'?'':fmtD(lv));
   $('scStatusText').textContent=stt;
   $('scStatusLamp').className='statusLamp '+(scState==='stop'?'isStop':scWaiting?'isWaiting':sc&&sc.trig?'isTriggered':'isAuto');
-  $('scRate').textContent=fmtHz(1e6/usPt).replace('Hz','Sa/s');
-  $('scPts').textContent=n+' pts'+(fps>0.3&&scState!=='stop'?' · '+fps.toFixed(1)+'fps':'');
+  $('scRate').textContent=fmtHz(1e6/(sc&&sc.usBase?sc.usBase:usPt)).replace('Hz','Sa/s');
+  $('scPts').textContent=(sc&&sc.Nfull?sc.Nfull:n)+' pts'+(fps>0.3&&scState!=='stop'?' · '+fps.toFixed(1)+'fps':'');
 }
 // ---- 波形へのタッチ操作（モード切替なし） ----
 // 1 本指: 波形をつかんで移動（左右=トリガ位置、上下=波形の位置）。右端の T をつかむとトリガレベル。カーソル線の近くならカーソル。
@@ -1591,7 +1615,7 @@ function drawScope(){
     else if((curMode&1)&&Math.abs(fx-curB)*w<26) drag={k:'B'};
     else if((curMode&2)&&Math.abs(fy-curC)*h<26&&Math.abs(fy-curC)<=Math.abs(fy-curD)) drag={k:'C'};
     else if((curMode&2)&&Math.abs(fy-curD)*h<26) drag={k:'D'};
-    else drag={k:'pan',x:fx,y:fy,c:vCen,p:cfg.tp,pan0:hPan,view:sc&&D&&sc.v.length*(sc.us||1)>D.st*1.03,moved:false};
+    else drag={k:'pan',x:fx,y:fy,c:vCen,p:cfg.tp,pan0:hPan,view:scState==='stop'&&sc&&D&&(sc.Nfull||sc.v.length)*(sc.usBase||sc.us||1)>D.st*1.03,moved:false};
   });
   cv.addEventListener('pointermove',e=>{
     if(!pts.has(e.pointerId)) return; e.preventDefault();
@@ -1769,8 +1793,8 @@ document.querySelectorAll('[data-win]').forEach(b=>b.onclick=()=>{plotWin=+b.dat
 $('btnPlotRun').onclick=()=>{plotRun=!plotRun; $('btnPlotRun').innerHTML=plotRun?ic('stop')+'停止':ic('play')+'再開'; drawPlot();};
 $('btnPlotClr').onclick=()=>{plot=[]; drawPlot();};
 $('btnPlotCsv').onclick=()=>saveCsv('plot.csv','time_iso,volt\n'+plot.map(p=>new Date(p[0]).toISOString()+','+p[1]).join('\n'));
-$('btnRun').onclick=()=>{ clearTimeout(scTimer); scState=scState==='stop'?'run':'stop'; showRun(); if(scState==='run') scRequest(); else { scStopStream(); drawScope(); } };
-$('btnSingle').onclick=async()=>{ clearTimeout(scTimer); scWait=false; scState='single'; showRun(); await send('!TM=N\n'); scLastId=sc?sc.id:-1; scRequest(); };
+$('btnRun').onclick=()=>{ clearTimeout(scTimer); scState=scState==='stop'?'run':'stop'; showRun(); if(scState==='run'){ hPan=0; snapDiv(); scRequest(); } else { scStopStream(); drawScope(); } };
+$('btnSingle').onclick=async()=>{ clearTimeout(scTimer); scWait=false; scState='single'; showRun(); hPan=0; snapDiv(); await send('!TM=N\n'); scLastId=sc?sc.id:-1; scRequest(); };
 // r29: 「自動」は、縦軸だけでなくトリガと時間軸も合わせる（エッジ・立上り・オート・レベル自動・位置中央、2〜4 周期が見える時間軸）
 function scAnalyze(){
   if(!sc) return null; const v=sc.v, n=v.length; let mn=Infinity,mx=-Infinity,s=0; v.forEach(x=>{mn=Math.min(mn,x);mx=Math.max(mx,x);s+=x;});
@@ -1894,9 +1918,7 @@ $('btnFftWin').onclick=()=>{ fftHann=!fftHann; $('btnFftWin').textContent=fftHan
   cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',e=>{ pts.delete(e.pointerId); pinch=null; drag=null; });
 })();
 // トリガの種類と条件（判定は本体ファーム v1.00 以上が行う）
-document.querySelectorAll('#segRm button').forEach(b=>b.onclick=()=>{ recMode=b.dataset.v; try{ localStorage.setItem('xm_rm',recMode); }catch(e){} setSeg('segRm',recMode); if(scState!=='stop'){ hPan=0; snapDiv(); } drawScope(); });
-setSeg('segRm',recMode);
-document.querySelectorAll('#segRl button').forEach(b=>b.onclick=()=>{ if(!connected) return; if(!fwRl){ msg('記録の長さの変更は、本体のファーム 1.13 以上が必要です。'); return; } hZoom=1; hPan=0; trigSet('RL','rl',+b.dataset.v); cfg.rl=+b.dataset.v; snapDiv(); drawScope(); });
+document.querySelectorAll('#segRl button').forEach(b=>b.onclick=()=>{ if(!connected) return; if(!fwRl){ msg('記録の長さの変更は、本体のファーム 1.13 以上が必要です。'); return; } if(+b.dataset.v>1024&&!(fwNum>=1.34&&(cfg.rlmax||0)>=+b.dataset.v)){ msg(fwNum>=1.34?'本体のメモリが足りず、この長さは使えません（最大 '+(cfg.rlmax||1024)+' 点）。':'1024 点を超える記録は、本体のファーム 1.34 以上が必要です。'); return; } hZoom=1; hPan=0; vwSent={a:-1,c:-1}; trigSet('RL','rl',+b.dataset.v); cfg.rl=+b.dataset.v; snapDiv(); drawScope(); });
 function needNew(){ if(fwNew) return true; msg('このトリガは本体のファーム 1.00 以上が必要です。'); return false; }
 async function trigSet(cmd,key,val){ if(!connected) return; cfg[key]=val; showCfg(); drawScope(); await send('!'+cmd+'='+val+'\n'); if(scState!=='stop'){ scWait=false; scRequest(); } }
 document.querySelectorAll('#segTt button').forEach(b=>b.onclick=()=>{ if(b.dataset.v!=='E'&&!needNew()) return; if(b.dataset.v==='I'&&!demo&&fwNum<1.32){ msg('「休み後」は本体のファーム 1.32 以上が必要です。'); return; } if(!'EW'.includes(b.dataset.v)&&cfg.te==='B') trigSet('TE','te','R'); trigSet('TT','tt',b.dataset.v); });
