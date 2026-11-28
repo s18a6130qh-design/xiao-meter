@@ -839,7 +839,7 @@ function setConn(){
   $('btnConn').className=connected?'':'pri'; $('btnDemo').style.display=connected&&!demo?'none':''; $('btnDemo').classList.toggle('on',!!demo); $('btnDemo').textContent=demo?'デモ終了':'デモ'; $('demoChip').style.display=demo?'':'none'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
 // アプリの版。情報の画面に出す（GitHub に上げた版が新しいかどうかを見分けるため）
-const APP_VER='2026-11-27 r44';
+const APP_VER='2026-11-28 r45';
 let fwNum=0, sentLog=[], lastErr='', nSb=0, keyInit=false;
 // 本体のボタン操作など 1 文字の命令。ファーム 1.14 以上は !KEY= の行で送る（1 文字のままだと、行の一部が欠けたときに誤動作するため）
 function sendKey(k){ return send(fwNum>=1.14?'!KEY='+k+'\n':k); }
@@ -853,9 +853,14 @@ function send(c){
   const key=c.includes('=')&&!c.startsWith('!KEY')&&!c.startsWith('!TX=')&&!c.startsWith('!PS=')&&!c.startsWith('!PD=')?c.split('=')[0]:null, seq=++sendSeq; if(key) lastOf[key]=seq;
   wq=wq.then(async()=>{
     if(key&&lastOf[key]!==seq) return;
-    const d=enc.encode(c); let err=null;
-    for(let k=0;k<6;k++){ try{ await (rx.writeValueWithResponse?rx.writeValueWithResponse(d):rx.writeValue(d)); return; }catch(e){ err=e; if(!connected) return; await sleep(100*(k+1)); } }
-    throw err;
+    // r45: 長い命令（登録の保存など）は 180 バイトずつに分けて送る。1 回の書き込みが大きすぎると断られる環境がある（ラズパイでは 244 バイトまで）。
+    //      本体は届いた順につなげて 1 行として受け取る。2 つ目以降は、間が 1 秒空くと本体が行を捨てるので、やり直しは 3 回まで。
+    const all=enc.encode(c);
+    for(let o=0;o<all.length;o+=180){
+      const d=all.subarray(o,o+180), tries=o?3:6; let err=null, ok=false;
+      for(let k=0;k<tries&&!ok;k++){ try{ await (rx.writeValueWithResponse?rx.writeValueWithResponse(d):rx.writeValue(d)); ok=true; }catch(e){ err=e; if(!connected) return; await sleep(100*(k+1)); } }
+      if(!ok) throw err;
+    }
   }).catch(e=>{ lastErr='送信 '+c.trim()+': '+((e&&(e.message||e.name))||String(e)); msg('送信できませんでした: '+c.trim()); });
   return wq;
 }
