@@ -764,7 +764,7 @@ let nBad=0,wq=Promise.resolve(),devMode='V',tab='scope',nLines=0,nErr=0;
 let hold=false,st={min:Infinity,max:-Infinity,sum:0,n:0};
 let plot=[],plotRun=true,plotWin=120;
 let sc=null,scState='run',scWait=false,scTimer=null,scWatch=null,scLastId=-1,scWaiting=false,cfg={tm:'A',te:'R',tla:1,tl:0,tb:0,tp:64,tt:'E',pc:'G',pw:1000,tl2a:1,tl2:0,th:0,rl:128},fwOk=true,fwRl=false,fwNew=false,lv2Drag=null,streaming=false,lastScAt=0,fps=0,preDrag=null,tpSent=0;
-let hPan=0, recMode='f';   // r43: 常に 'f'（拡大した画面の細かさで取り込む）。'w' は使わない   // recMode: w=画面は約 128 点で、残りの記録を前後に使う / f=記録を全部画面に詰める
+let hPan=0, tpFixAt=0, tbCmdAt=0, rlCmdAt=0, recMode='f';   // r43: 常に 'f'（拡大した画面の細かさで取り込む）。'w' は使わない   // recMode: w=画面は約 128 点で、残りの記録を前後に使う / f=記録を全部画面に詰める
    // r40: 拡大したときの表示の左右のずらし（µs、トリガ点が基準）
 let vAuto=true,vDiv=0.5,vCen=0,hZoom=1,tbSwitchAt=0,D=null,animReq=false,gesture=false;
 // 本体の時間軸（µs/点）。ファーム 1.10 以上は SPI 取り込みで 9 段、それより前は 3 段
@@ -839,7 +839,7 @@ function setConn(){
   $('btnConn').className=connected?'':'pri'; $('btnDemo').style.display=connected&&!demo?'none':''; $('btnDemo').classList.toggle('on',!!demo); $('btnDemo').textContent=demo?'デモ終了':'デモ'; $('demoChip').style.display=demo?'':'none'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
 // アプリの版。情報の画面に出す（GitHub に上げた版が新しいかどうかを見分けるため）
-const APP_VER='2026-11-28 r46';
+const APP_VER='2026-11-28 r48';
 let fwNum=0, sentLog=[], lastErr='', nSb=0, keyInit=false;
 // 本体のボタン操作など 1 文字の命令。ファーム 1.14 以上は !KEY= の行で送る（1 文字のままだと、行の一部が欠けたときに誤動作するため）
 function sendKey(k){ return send(fwNum>=1.14?'!KEY='+k+'\n':k); }
@@ -848,6 +848,7 @@ function send(c){
   sentLog.push(c.trim()); if(sentLog.length>8) sentLog.shift();
   if(demo){ demoCmd(c); return Promise.resolve(); }
   if(!connected) return Promise.resolve();
+  if(c.startsWith('!TB=')) tbCmdAt=Date.now(); else if(c.startsWith('!RL=')) rlCmdAt=Date.now();   // r48
   // 本体が波形を送っている最中は書き込みが一時的に失敗することがあるので、やり直す（r24: 3 回 → 6 回、間隔を少しずつ延ばす。合計で約 1.5 秒）
   // 同じ種類の設定（!TB= など）が続けて積まれたときは、最後の 1 つだけ送る（矢印の連打で古い値を送り続けない）。!KEY= は 1 回ずつ意味があるので省かない
   const key=c.includes('=')&&!c.startsWith('!KEY')&&!c.startsWith('!TX=')&&!c.startsWith('!PS=')&&!c.startsWith('!PD=')?c.split('=')[0]:null, seq=++sendSeq; if(key) lastOf[key]=seq;
@@ -1053,6 +1054,7 @@ function handle(o){
     o.v=v; o.sc=1; o.calM=o.m; delete o.m; nSb++;
     // r44（ファーム 1.34〜）: 本体は長い記録を持ち、画面に要る範囲だけを送る。N=記録全体の点数、vs=範囲の先頭、vc=範囲の点数、vd=最小・最大にまとめた
     { const N=o.N!==undefined?o.N|0:v.length, vs=o.vs|0, vc=o.vc!==undefined?o.vc|0:v.length, step=vc/v.length;
+      if(o.N!==undefined&&fwRl&&cfg.rl!==N&&N>=128&&Date.now()-rlCmdAt>3000&&!gesture){ cfg.rl=N; showCfg(); }   // r48: 本体の実際の記録の長さに合わせる
       o.Nfull=N; o.vs=vs; o.step=step; o.dec=!!o.vd; o.usBase=o.us; o.preFull=o.pre; o.us=o.us*step; o.pre=Math.round((o.pre-vs)/step); }
   }
   if(typeof o.m==='string'){
@@ -1089,7 +1091,12 @@ function handle(o){
     tone(short&&tab==='cont');
   }else if(o.cfg){
     const keep=lvDrag!==null?cfg.tl:null, keepP=preDrag!==null?cfg.tp:null; const _ptb=cfg.tb, _prl=cfg.rl; if(o.tb>=11) setTbTable(US_121,TB_121); else if(o.tb>=9&&US_NOM!==US_121) setTbTable(US_116,TB_116); else if(o.tb>=US_NOM.length) setTbTable(US_NEW,null);
-    o.tbFw=o.tb; o.tb=tbLogical(o.tb); cfg=o; if(cfg.tp===undefined) cfg.tp=31; fwRl=o.rl!==undefined; if(!fwRl) cfg.rl=128; fwNew=o.tt!==undefined; if(!fwNew){ cfg.tt='E'; cfg.pc='G'; cfg.pw=1000; cfg.tl2a=1; cfg.tl2=0; cfg.th=0; } if(lv2Drag!==null){ cfg.tl2=lv2Drag; cfg.tl2a=0; } if(keep!==null) cfg.tl=keep; if(keepP!==null) cfg.tp=keepP; if(o.mode) devMode=o.mode; if((_ptb!==cfg.tb||_prl!==cfg.rl)&&Date.now()-tbSwitchAt>1000&&!gesture){ hZoom=1; snapDiv(); } showCfg();
+    o.tbFw=o.tb; o.tb=tbLogical(o.tb); cfg=o; if(cfg.tp===undefined) cfg.tp=31; fwRl=o.rl!==undefined; if(!fwRl) cfg.rl=128; fwNew=o.tt!==undefined; if(!fwNew){ cfg.tt='E'; cfg.pc='G'; cfg.pw=1000; cfg.tl2a=1; cfg.tl2=0; cfg.th=0; } if(lv2Drag!==null){ cfg.tl2=lv2Drag; cfg.tl2a=0; } if(keep!==null) cfg.tl=keep; if(keepP!==null) cfg.tp=keepP; if(o.mode) devMode=o.mode; // r48: 時間軸や記録の長さの命令を本体へ送ってから 3 秒以内（と、指で操作している間）は、本体の返事でそれらを上書きしない。
+    //      長い記録では本体の返事が 1 秒以上遅れることがあり、古い返事で時間軸が戻されて、拡大率まで初期値に戻っていた。
+    if(Date.now()-tpFixAt<3000) cfg.tp=64;
+    if((Date.now()-tbCmdAt<3000||gesture)&&_ptb!==undefined) cfg.tb=_ptb;
+    if(Date.now()-rlCmdAt<3000&&_prl!==undefined&&fwRl) cfg.rl=_prl;
+    if((_ptb!==cfg.tb||_prl!==cfg.rl)&&!gesture){ hZoom=longRec()?6.55:1; snapDiv(); } showCfg();   // 本体側で変わったとき（接続直後など）は、本体の時間軸に合わせる。長い記録では画面に記録の約 1/6.5 を映す
   }else if(o.scw){
     scWaiting=true; if(sc) drawScope();
   }else if(o.sc){
@@ -1415,7 +1422,7 @@ function scViewSync(){
   const same=(a===vwSent.a&&c===vwSent.c)||(c>0&&vwSent.c>0&&Math.abs(a-vwSent.a)<Math.max(2,c*0.02)&&Math.abs(c-vwSent.c)<Math.max(2,c*0.02));
   if(same) return;
   clearTimeout(vwTimer);
-  const go=()=>{ vwSent={a:a,c:c}; vwAt=Date.now(); send('!VW='+a+','+c+'\n'); if(scState==='stop') send('!VS\n'); };
+  const go=()=>{ vwSent={a:a,c:c}; vwAt=Date.now(); send('!VW='+a+','+c+'\n'); if(scState==='stop'||scWaiting) send('!VS\n'); };   // r47: 動作中でも、トリガ待ちで新しい波形が来ないときは、今の記録を新しい範囲で送り直してもらう
   const wait=150-(Date.now()-vwAt); if(wait<=0) go(); else vwTimer=setTimeout(go,wait);
 }
 function scRange(){ let mn=Infinity,mx=-Infinity; sc.v.forEach(x=>{mn=Math.min(mn,x);mx=Math.max(mx,x);}); return [mn,mx]; }
@@ -1472,6 +1479,9 @@ function snapDiv(){ const cur=screenTime()/10, L=divOk(); if(!L.length) return; 
 function niceNum(val,dv){ if(Math.abs(val)<dv*1e-6) return '0'; const a=Math.abs(val); return val.toFixed(dv>=1?(a%1<1e-9?0:1):dv>=0.1?1:dv>=0.01?2:3); }
 function drawScope(){
   animReq=false;
+  // r48: 長い記録では、トリガ点を記録の中央に置く（前後に同じだけ余りを持たせ、左右どちらにもずらせるように）。
+  //      それまでのトリガ位置が端に寄っていると、片側に 1 画面分も動かせなかった。画面上の位置は変えない。
+  if(longRec()&&connected&&cfg.tp!==64&&preDrag===null&&!gesture){ hPan+=(64-cfg.tp)/127*screenTime(); cfg.tp=64; tpFixAt=Date.now(); send('!TP=64\n'); }
   const [c,W,H]=prep($('cvScope')); const NX=10,NY=8;
   let mn=0,mx=1,avg=0,n=128,v=null;
   if(sc){ v=sc.v; n=v.length; [mn,mx]=scRange(); let s=0; v.forEach(x=>s+=x); avg=s/n; }
@@ -1600,7 +1610,7 @@ function drawScope(){
   $('scStatusText').textContent=stt;
   $('scStatusLamp').className='statusLamp '+(scState==='stop'?'isStop':scWaiting?'isWaiting':sc&&sc.trig?'isTriggered':'isAuto');
   $('scRate').textContent=fmtHz(1e6/(sc&&sc.usBase?sc.usBase:usPt)).replace('Hz','Sa/s');
-  $('scPts').textContent=(sc&&sc.Nfull?sc.Nfull:n)+' pts'+(fps>0.3&&scState!=='stop'?' · '+fps.toFixed(1)+'fps':'');
+  $('scPts').textContent=(sc&&sc.Nfull?sc.Nfull:n)+' pts'+(fps>0.3&&scState!=='stop'?' · '+fps.toFixed(1)+'fps':'')+' · '+APP_VER.split(' ')[1];
 }
 // ---- 波形へのタッチ操作（モード切替なし） ----
 // 1 本指: 波形をつかんで移動（左右=トリガ位置、上下=波形の位置）。右端の T をつかむとトリガレベル。カーソル線の近くならカーソル。
@@ -1948,7 +1958,7 @@ $('btnFftWin').onclick=()=>{ fftHann=!fftHann; $('btnFftWin').textContent=fftHan
   cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',e=>{ pts.delete(e.pointerId); pinch=null; drag=null; });
 })();
 // トリガの種類と条件（判定は本体ファーム v1.00 以上が行う）
-document.querySelectorAll('#segRl button').forEach(b=>b.onclick=()=>{ if(!connected) return; if(!fwRl){ msg('記録の長さの変更は、本体のファーム 1.13 以上が必要です。'); return; } if(+b.dataset.v>1024&&!(fwNum>=1.34&&(cfg.rlmax||0)>=+b.dataset.v)){ msg(fwNum>=1.34?'本体のメモリが足りず、この長さは使えません（最大 '+(cfg.rlmax||1024)+' 点）。':'1024 点を超える記録は、本体のファーム 1.34 以上が必要です。'); return; } hZoom=1; hPan=0; vwSent={a:-1,c:-1}; trigSet('RL','rl',+b.dataset.v); cfg.rl=+b.dataset.v; snapDiv(); drawScope(); });
+document.querySelectorAll('#segRl button').forEach(b=>b.onclick=()=>{ if(!connected) return; if(!fwRl){ msg('記録の長さの変更は、本体のファーム 1.13 以上が必要です。'); return; } if(+b.dataset.v>1024&&!(fwNum>=1.34&&(cfg.rlmax||0)>=+b.dataset.v)){ msg(fwNum>=1.34?'本体のメモリが足りず、この長さは使えません（最大 '+(cfg.rlmax||1024)+' 点）。':'1024 点を超える記録は、本体のファーム 1.34 以上が必要です。'); return; } const stOld=screenTime(); hPan=0; vwSent={a:-1,c:-1}; trigSet('RL','rl',+b.dataset.v); cfg.rl=+b.dataset.v; setDiv(stOld/10); snapDiv(); drawScope(); });   // r48: 記録の長さを変えても、画面の時間幅は保つ
 function needNew(){ if(fwNew) return true; msg('このトリガは本体のファーム 1.00 以上が必要です。'); return false; }
 async function trigSet(cmd,key,val){ if(!connected) return; cfg[key]=val; showCfg(); drawScope(); await send('!'+cmd+'='+val+'\n'); if(scState!=='stop'){ scWait=false; scRequest(); } }
 document.querySelectorAll('#segTt button').forEach(b=>b.onclick=()=>{ if(b.dataset.v!=='E'&&!needNew()) return; if(b.dataset.v==='I'&&!demo&&fwNum<1.32){ msg('「休み後」は本体のファーム 1.32 以上が必要です。'); return; } if(!'EW'.includes(b.dataset.v)&&cfg.te==='B') trigSet('TE','te','R'); trigSet('TT','tt',b.dataset.v); });
