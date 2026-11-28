@@ -839,7 +839,7 @@ function setConn(){
   $('btnConn').className=connected?'':'pri'; $('btnDemo').style.display=connected&&!demo?'none':''; $('btnDemo').classList.toggle('on',!!demo); $('btnDemo').textContent=demo?'デモ終了':'デモ'; $('demoChip').style.display=demo?'':'none'; if(!connected) $('sub').innerHTML='<span class="chip dim">未接続</span>';
 }
 // アプリの版。情報の画面に出す（GitHub に上げた版が新しいかどうかを見分けるため）
-const APP_VER='2026-11-28 r45';
+const APP_VER='2026-11-28 r46';
 let fwNum=0, sentLog=[], lastErr='', nSb=0, keyInit=false;
 // 本体のボタン操作など 1 文字の命令。ファーム 1.14 以上は !KEY= の行で送る（1 文字のままだと、行の一部が欠けたときに誤動作するため）
 function sendKey(k){ return send(fwNum>=1.14?'!KEY='+k+'\n':k); }
@@ -1404,7 +1404,7 @@ function decUi(){
 let vwSent={a:-1,c:-1}, vwAt=0, vwTimer=0;
 function scViewSync(){
   if(!connected||demo||!sc||!sc.Nfull||!(fwNum>=1.34)||!D) return;
-  const NF=sc.Nfull, ub=sc.usBase, pf=sc.preFull, st=D.st, tf=D.tf, pan=scState==='stop'?D.pan:0;
+  const NF=sc.Nfull, ub=sc.usBase, pf=sc.preFull, st=D.st, tf=D.tf, pan=D.pan||0;
   let a, c;
   if(NF<=1024&&scState!=='stop'){ a=0; c=0; }
   else {
@@ -1425,17 +1425,29 @@ function showRun(){
   $('btnSingle').classList.toggle('on',scState==='single');
 }
 // 時間軸: 画面全体の時間 = 本体のサンプル間隔 × 127 ÷ hZoom。hZoom が範囲を外れたら本体の間隔を切り替える（見かけの倍率は連続）
+// r46: 記録が長い（4096 点以上）ときは、画面に「記録の 1/8 以上の点」が入る範囲でいちばん粗い間隔で取る。
+//      記録が画面の前後に余るので、動かしているときも左右にずらして、トリガ点の外側まで見られる。
+function longRec(){ return (cfg.rl||128)>=4096&&fwNum>=1.34&&!demo; }
+function longPts(){ return (cfg.rl||128)/8; }   // 画面に入れる点数の下限（16384 点なら 2048、4096 点なら 512）。記録は画面の 3〜8 倍の長さになる
 function screenTime(){ return US_NOM[cfg.tb|0]*((cfg.rl||128)-1)/hZoom; }
 function normZoom(){
   // r40: 拡大しても、画面に 100 点以上あるうちは取り込みの間隔を変えない（記録が画面より長いまま残り、左右にずらして見られる）。
   //      止めているときは取り直さないので、間隔は変えずに拡大だけする。
   const tb=cfg.tb|0, now=Date.now(), rl=cfg.rl||128, stop=scState==='stop';
-  if(!stop&&now-tbSwitchAt>350){
-    if(hZoom<1&&tb<US_NOM.length-1){ hZoom*=US_NOM[tb+1]/US_NOM[tb]; cfg.tb=tb+1; tbSwitchAt=now; send('!TB='+tbFw(cfg.tb)+'\n'); }
-    else if(tb>0&&(recMode==='f'||(rl-1)/hZoom<100)&&hZoom>=US_NOM[tb]/US_NOM[tb-1]){ hZoom/=US_NOM[tb]/US_NOM[tb-1]; cfg.tb=tb-1; tbSwitchAt=now; send('!TB='+tbFw(cfg.tb)+'\n'); }
+  const lg=longRec();
+  if(!stop&&now-tbSwitchAt>(lg?120:350)){
+    // r46: 1 回の呼び出しで何段でも切り替える（速くつまんだときに、途中で拡大が引っかからないように）。本体へ送るのは最後の 1 回だけ
+    let tbn=cfg.tb|0, ch=false;
+    for(let g=0;g<24;g++){
+      if(hZoom<1&&tbn<US_NOM.length-1){ hZoom*=US_NOM[tbn+1]/US_NOM[tbn]; tbn++; ch=true; }
+      else if(tbn>0&&(lg?(rl-1)/hZoom<longPts():true)&&(lg||recMode==='f'||(rl-1)/hZoom<100)&&hZoom>=US_NOM[tbn]/US_NOM[tbn-1]){ hZoom/=US_NOM[tbn]/US_NOM[tbn-1]; tbn--; ch=true; }
+      else break;
+      if(!lg) break;
+    }
+    if(ch){ cfg.tb=tbn; tbSwitchAt=now; send('!TB='+tbFw(cfg.tb)+'\n'); }
   }
   const t2=cfg.tb|0, r=t2>0?US_NOM[t2]/US_NOM[t2-1]:1;
-  const zmax=(stop||t2===0)?Math.max(1,(rl-1)/8):(recMode==='f'?r:Math.max(r,(rl-1)/100))*1.3, zmin=(stop||t2===US_NOM.length-1)?1:0.7;
+  const zmax=(stop||t2===0)?Math.max(1,(rl-1)/8):(lg?Math.max(r,(rl-1)/longPts()*r):recMode==='f'?r:Math.max(r,(rl-1)/100))*1.3, zmin=(stop||t2===US_NOM.length-1)?1:0.7;
   hZoom=Math.min(zmax,Math.max(zmin,hZoom));
 }
 // r23: 「時間 / 目盛」を 1・2・5 の切りのよい値にそろえる（以前は 103µs のような半端な値になった）
@@ -1448,12 +1460,13 @@ function setDiv(d,keep){
   else {
     let best=-1;
     // r41: 前後も記録: 画面に 100 点以上入る中で、いちばん粗い間隔（記録がいちばん長くなり、止めてから縮小・左右にずらして前後を見られる）
-    if(recMode==='w') for(let i=0;i<US_NOM.length;i++){ if(US_NOM[i]*(rl-1)>=st*0.999&&st/US_NOM[i]>=100) best=i; }
+    const thr=longRec()?longPts():(recMode==='w'?100:0);
+    if(thr) for(let i=0;i<US_NOM.length;i++){ if(US_NOM[i]*(rl-1)>=st*0.999&&st/US_NOM[i]>=thr) best=i; }
     if(best<0) for(let i=0;i<US_NOM.length;i++){ if(US_NOM[i]*(rl-1)>=st*0.999){ best=i; break; } }   // 画面を埋められる中で、いちばん細かい取り込み間隔
     tb=best<0?US_NOM.length-1:best;
   }
   hZoom=Math.max(stop?1:1e-6,US_NOM[tb]*(rl-1)/st);
-  if(tb!==cur){ cfg.tb=tb; tbSwitchAt=Date.now(); hPan=0; if(connected) send('!TB='+tbFw(tb)+'\n'); }
+  if(tb!==cur){ cfg.tb=tb; tbSwitchAt=Date.now(); if(!longRec()) hPan=0; if(connected) send('!TB='+tbFw(tb)+'\n'); }
 }
 function snapDiv(){ const cur=screenTime()/10, L=divOk(); if(!L.length) return; let b=L[0]; for(const d of L) if(Math.abs(Math.log(d/cur))<Math.abs(Math.log(b/cur))) b=d; setDiv(b,true); }
 function niceNum(val,dv){ if(Math.abs(val)<dv*1e-6) return '0'; const a=Math.abs(val); return val.toFixed(dv>=1?(a%1<1e-9?0:1):dv>=0.1?1:dv>=0.01?2:3); }
@@ -1486,7 +1499,7 @@ function drawScope(){
   if(sc&&sc.trig&&!sc.dec&&sc.pre>0&&sc.pre<n){ const a=v[sc.pre-1],b=v[sc.pre]; if(b!==a){ const f=(sc.lv-a)/(b-a); if(f>=0&&f<=1) cpos=sc.pre-1+f; } }
   const usPt=sc?sc.us:US_NOM[cfg.tb|0];
   // r40: 記録が画面より長いときは、左右にずらして記録の外側を見られる。記録の端を越えないように抑える
-  { if(sc&&scState==='stop'){ const ub=sc.usBase||usPt, pf=sc.preFull!==undefined?sc.preFull:cpos, NF=sc.Nfull||n, lo=-pf*ub+T.tf*T.st, hi=(NF-1-pf)*ub-(1-T.tf)*T.st; hPan=hi<lo?0:Math.min(hi,Math.max(lo,hPan)); } else hPan=0; D.pan=hPan; }
+  { if(sc&&(scState==='stop'||longRec())){ const ub=sc.usBase||usPt, pf=sc.preFull!==undefined?sc.preFull:cpos, NF=sc.Nfull||n, lo=-pf*ub+T.tf*T.st, hi=(NF-1-pf)*ub-(1-T.tf)*T.st; hPan=hi<lo?0:Math.min(hi,Math.max(lo,hPan)); } else hPan=0; D.pan=hPan; }
   const XI=i=>W*(D.tf+((i-cpos)*usPt-D.pan)/D.st), IX=f=>cpos+((f-D.tf)*D.st+D.pan)/usPt;
   geo={W,H,NY};
   // 目盛
@@ -1593,7 +1606,7 @@ function drawScope(){
 // 1 本指: 波形をつかんで移動（左右=トリガ位置、上下=波形の位置）。右端の T をつかむとトリガレベル。カーソル線の近くならカーソル。
 // 2 本指: 左右のピンチ=時間軸、上下のピンチ=電圧軸。2 回タップ=自動。
 (function(){
-  const cv=$('cvScope'), pts=new Map(); let pinch=null;
+  const cv=$('cvScope'), pts=new Map(); let pinch=null, tap=null, lastX=0, lastY=0;
   const pos=e=>{const r=cv.getBoundingClientRect(); return [(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height,r.width,r.height];};
   const yToV=fy=>vCen+(0.5-fy)*8*vDiv;
   function sendLv(force){ if(lvDrag===null) return; const now=Date.now(); if(force||now-lvSent>200){ lvSent=now; cfg.tla=0; cfg.tl=lvDrag; send('!TL='+lvDrag.toFixed(3)+'\n'); } }
@@ -1608,10 +1621,11 @@ function drawScope(){
     e.preventDefault(); cv.setPointerCapture(e.pointerId);
     const [fx,fy,w,h]=pos(e); pts.set(e.pointerId,[fx,fy]);
     gesture=true;
-    if(pts.size===2){ finish(); gesture=true; const p=[...pts.values()]; pinch={dx:Math.abs(p[0][0]-p[1][0])*w,dy:Math.abs(p[0][1]-p[1][1])*h,z:hZoom,vd:vDiv}; pinch.hor=pinch.dx>=pinch.dy; return; }
-    if(pts.size>2) return;
-    const now=Date.now();
-    if(now-lastTap<300){ lastTap=0; gesture=false; vAuto=true; saveUiPrefs(); hZoom=Math.max(1,Math.min(hZoom,1)); hPan=0; cfg.tp=64; send('!TP=64\n'); drawScope(); return; } lastTap=now;
+    if(pts.size===2){ finish(); gesture=true; tap=null; const p=[...pts.values()]; pinch={dx:Math.abs(p[0][0]-p[1][0])*w,dy:Math.abs(p[0][1]-p[1][1])*h,z:hZoom,vd:vDiv,st0:screenTime(),pan0:hPan}; pinch.hor=pinch.dx>=pinch.dy; return; }
+    if(pts.size>2){ tap=null; return; }
+    // r46: 2 回タップ（自動に戻す）は、指を離したときに判定する。動かさずに短く触れて離した 1 本指だけをタップと数える。
+    //      r45 までは「触れた瞬間」が 0.3 秒以内に 2 回あるだけで働き、つまむ操作や続けてのドラッグでトリガ位置が中央に戻っていた。
+    tap={t:Date.now(),x:fx*w,y:fy*h,ok:true};
     const lv=sc&&cfg.tla?sc.lv:cfg.tl, yl=0.5-(lv-vCen)/(8*vDiv);
     const yl2=0.5-(cfg.tl2-vCen)/(8*vDiv), has2='RWS'.includes(cfg.tt);
     if(has2&&fx*w>w-56&&Math.abs(fy-yl2)*h<26&&Math.abs(fy-yl2)<Math.abs(fy-yl)) drag={k:'trig2'};
@@ -1620,17 +1634,20 @@ function drawScope(){
     else if((curMode&1)&&Math.abs(fx-curB)*w<26) drag={k:'B'};
     else if((curMode&2)&&Math.abs(fy-curC)*h<26&&Math.abs(fy-curC)<=Math.abs(fy-curD)) drag={k:'C'};
     else if((curMode&2)&&Math.abs(fy-curD)*h<26) drag={k:'D'};
-    else drag={k:'pan',x:fx,y:fy,c:vCen,p:cfg.tp,pan0:hPan,view:scState==='stop'&&sc&&D&&(sc.Nfull||sc.v.length)*(sc.usBase||sc.us||1)>D.st*1.03,moved:false};
+    else drag={k:'pan',x:fx,y:fy,c:vCen,p:cfg.tp,pan0:hPan,view:(scState==='stop'||longRec())&&sc&&D&&(sc.Nfull||sc.v.length)*(sc.usBase||sc.us||1)>D.st*1.03,moved:false};
   });
   cv.addEventListener('pointermove',e=>{
     if(!pts.has(e.pointerId)) return; e.preventDefault();
     const [fx,fy,w,h]=pos(e); pts.set(e.pointerId,[fx,fy]);
     if(pinch&&pts.size>=2){
       const p=[...pts.values()], dx=Math.abs(p[0][0]-p[1][0])*w, dy=Math.abs(p[0][1]-p[1][1])*h;
-      if(pinch.hor){ const before=hZoom, tb0=cfg.tb; hZoom=pinch.z*Math.max(dx,20)/Math.max(pinch.dx,20); normZoom(); if(cfg.tb!==tb0){ pinch.z=hZoom; pinch.dx=Math.max(dx,20); } }
+      if(pinch.hor){ const tb0=cfg.tb, st1=screenTime(); hZoom=pinch.z*Math.max(dx,20)/Math.max(pinch.dx,20); normZoom(); if(cfg.tb!==tb0){ pinch.z=hZoom; pinch.dx=Math.max(dx,20); }
+        // r46: 左右にずらせる状態（止めているとき、記録が長いとき）では、2 本の指の中央の時刻を動かさずに拡大・縮小する
+        if(scState==='stop'||longRec()){ const fm=(p[0][0]+p[1][0])/2, tf=cfg.tp/127; hPan+=(fm-tf)*(st1-screenTime()); } }
       else { vAuto=false; vDiv=Math.min(25,Math.max(0.002,pinch.vd*Math.max(pinch.dy,20)/Math.max(dy,20))); saveUiPrefs(); }
       drawScope(); return;
     }
+    if(tap&&Math.hypot(fx*w-tap.x,fy*h-tap.y)>10) tap.ok=false;
     if(!drag) return;
     const cl=Math.min(1,Math.max(0,fx));
     if(drag.k==='trig'){ lvDrag=yToV(Math.min(1,Math.max(0,fy))); sendLv(false); }
@@ -1639,14 +1656,22 @@ function drawScope(){
     else if(drag.k==='C') curC=Math.min(1,Math.max(0,fy)); else if(drag.k==='D') curD=Math.min(1,Math.max(0,fy));
     else {
       if(!drag.moved&&Math.hypot((fx-drag.x)*w,(fy-drag.y)*h)<6) return;
-      drag.moved=true; lastTap=0;
+      drag.moved=true;
       if(Math.abs(fy-drag.y)*h>4){ vAuto=false; vCen=drag.c+(fy-drag.y)*8*vDiv; saveUiPrefs(); }
       if(drag.view) hPan=drag.pan0-(fx-drag.x)*D.st;   // r40: 記録が画面より長いときは表示をずらす（取り込みの設定は変えない）
       else { preDrag=Math.min(123,Math.max(4,drag.p+(fx-drag.x)*127)); sendTp(false); }
     }
     drawScope();
   });
-  const up=e=>{ pts.delete(e.pointerId); if(pts.size<2){ if(pinch&&pinch.hor){ snapDiv(); drawScope(); } pinch=null; } if(pts.size===0){ gesture=false; finish(); } };
+  function autoView(){ vAuto=true; saveUiPrefs(); if(!longRec()) hZoom=1; hPan=0; cfg.tp=64; send('!TP=64\n'); drawScope(); }
+  const up=e=>{ pts.delete(e.pointerId);
+    if(pts.size<2){ if(pinch&&pinch.hor){ const st1=screenTime(), fm=0.5; snapDiv(); if(scState==='stop'||longRec()) hPan+=(fm-cfg.tp/127)*(st1-screenTime()); drawScope(); } pinch=null; }
+    if(pts.size===0){ gesture=false; const now=Date.now(), tp0=tap; tap=null; finish();
+      if(e.type==='pointerup'&&tp0&&tp0.ok&&now-tp0.t<280){
+        if(now-lastTap<380&&Math.hypot(tp0.x-lastX,tp0.y-lastY)<36){ lastTap=0; autoView(); }
+        else { lastTap=now; lastX=tp0.x; lastY=tp0.y; }
+      } else lastTap=0;
+    } };
   cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up);
 })();
 
@@ -1798,8 +1823,8 @@ document.querySelectorAll('[data-win]').forEach(b=>b.onclick=()=>{plotWin=+b.dat
 $('btnPlotRun').onclick=()=>{plotRun=!plotRun; $('btnPlotRun').innerHTML=plotRun?ic('stop')+'停止':ic('play')+'再開'; drawPlot();};
 $('btnPlotClr').onclick=()=>{plot=[]; drawPlot();};
 $('btnPlotCsv').onclick=()=>saveCsv('plot.csv','time_iso,volt\n'+plot.map(p=>new Date(p[0]).toISOString()+','+p[1]).join('\n'));
-$('btnRun').onclick=()=>{ clearTimeout(scTimer); scState=scState==='stop'?'run':'stop'; showRun(); if(scState==='run'){ hPan=0; snapDiv(); scRequest(); } else { scStopStream(); drawScope(); } };
-$('btnSingle').onclick=async()=>{ clearTimeout(scTimer); scWait=false; scState='single'; showRun(); hPan=0; snapDiv(); await send('!TM=N\n'); scLastId=sc?sc.id:-1; scRequest(); };
+$('btnRun').onclick=()=>{ clearTimeout(scTimer); scState=scState==='stop'?'run':'stop'; showRun(); if(scState==='run'){ if(!longRec()) hPan=0; snapDiv(); scRequest(); } else { scStopStream(); drawScope(); } };
+$('btnSingle').onclick=async()=>{ clearTimeout(scTimer); scWait=false; scState='single'; showRun(); if(!longRec()) hPan=0; snapDiv(); await send('!TM=N\n'); scLastId=sc?sc.id:-1; scRequest(); };
 // r29: 「自動」は、縦軸だけでなくトリガと時間軸も合わせる（エッジ・立上り・オート・レベル自動・位置中央、2〜4 周期が見える時間軸）
 function scAnalyze(){
   if(!sc) return null; const v=sc.v, n=v.length; let mn=Infinity,mx=-Infinity,s=0; v.forEach(x=>{mn=Math.min(mn,x);mx=Math.max(mx,x);s+=x;});
